@@ -9,8 +9,8 @@ import {
 
 // The setting for this workflow - matching customer's configuration
 export const workflowSettings: WorkflowSettings = {
-  id: "debugTokenGeneration",
-  name: "Debug Token Generation Workflow",
+  id: "onUserTokenGeneration",
+  name: "Custom Access Token Workflow (Debug Mode)",
   trigger: WorkflowTrigger.UserTokenGeneration,
   failurePolicy: {
     action: "stop",
@@ -28,7 +28,7 @@ function safeStringify(obj: any): string {
   try {
     return JSON.stringify(obj, null, 2);
   } catch (error) {
-    return `[Stringify Error: ${error.message}]`;
+    return `[Stringify Error: ${error instanceof Error ? error.message : 'Unknown error'}]`;
   }
 }
 
@@ -67,8 +67,8 @@ export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
       });
     } catch (directError) {
       debugLog("STEP_1_ERROR", {
-        error: directError.message,
-        stack: directError.stack,
+        error: directError instanceof Error ? directError.message : 'Unknown error',
+        stack: directError instanceof Error ? directError.stack : 'No stack trace',
       });
     }
 
@@ -149,23 +149,25 @@ export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
       });
 
     } catch (orgError) {
+      const errorMessage = orgError instanceof Error ? orgError.message : 'Unknown error';
+      
       debugLog("STEP_3_ERROR", {
-        error: orgError.message,
-        stack: orgError.stack,
+        error: errorMessage,
+        stack: orgError instanceof Error ? orgError.stack : 'No stack trace',
         duration: Date.now() - apiCallStart,
       });
       
       // Check if this is the customer's specific error
-      if (orgError.message.includes("illegal base64 data")) {
+      if (errorMessage.includes("illegal base64 data")) {
         debugLog("CUSTOMER_BASE64_ERROR", {
-          exactError: orgError.message,
+          exactError: errorMessage,
           possibleCause: "Cache corruption or token validation failure",
         });
       }
       
-      if (orgError.message.includes("INVALID_CREDENTIALS")) {
+      if (errorMessage.includes("INVALID_CREDENTIALS")) {
         debugLog("CUSTOMER_CREDENTIALS_ERROR", {
-          exactError: orgError.message,
+          exactError: errorMessage,
           possibleCause: "Token expired and refresh failed",
         });
       }
@@ -183,10 +185,11 @@ export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
     
   } catch (error) {
     const totalDuration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     debugLog("WORKFLOW_ERROR", {
-      error: error.message,
-      stack: error.stack,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : 'No stack trace',
       totalDuration,
       timestamp: new Date().toISOString(),
     });
@@ -198,8 +201,8 @@ export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
       }>();
       
       accessToken.debug_error = {
-        message: error.message,
-        type: error.constructor.name,
+        message: errorMessage,
+        type: error instanceof Error ? error.constructor.name : 'Unknown',
         timestamp: new Date().toISOString(),
         duration: totalDuration,
       };
@@ -209,8 +212,8 @@ export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
       });
     } catch (tokenError) {
       debugLog("TOKEN_ERROR_LOGGING_FAILED", {
-        tokenError: tokenError.message,
-        originalError: error.message,
+        tokenError: tokenError instanceof Error ? tokenError.message : 'Unknown token error',
+        originalError: errorMessage,
       });
     }
     
@@ -247,7 +250,8 @@ export async function testTokenOperations(event: onUserTokenGeneratedEvent) {
     return { success: true, tests: 3 };
     
   } catch (error) {
-    console.log("❌ Manual test failed:", error.message);
-    return { success: false, error: error.message };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.log("❌ Manual test failed:", errorMessage);
+    return { success: false, error: errorMessage };
   }
 } 
