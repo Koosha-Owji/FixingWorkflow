@@ -10,7 +10,7 @@ import {
 // The setting for this workflow - matching customer's configuration
 export const workflowSettings: WorkflowSettings = {
   id: "onUserTokenGeneration",
-  name: "Custom Access Token Workflow (Debug Mode)",
+  name: "Custom Access Token Workflow (Testing Mode)",
   trigger: WorkflowTrigger.UserTokenGeneration,
   failurePolicy: {
     action: "stop",
@@ -50,26 +50,36 @@ export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
       domain: event.context.domains?.kindeDomain,
     });
 
-    // Step 1: Test direct token creation
-    debugLog("STEP_1_START", "Testing direct M2M token creation");
+    // Step 1: Test immediate API creation (no pre-warming) - like customer's original
+    debugLog("STEP_1_IMMEDIATE_TEST", "Testing immediate createKindeAPI like customer");
     
     try {
-      const directToken = await getM2MToken("debug_direct_token", {
-        domain: event.context.domains.kindeDomain,
-        clientId: "test_client_id", // This will fail but we can see the error
-        clientSecret: "test_client_secret",
-        audience: [`${event.context.domains.kindeDomain}/api`],
+      // Test the exact customer flow - immediate API creation and call
+      const immediateAPI = await createKindeAPI(event);
+      const immediateResult = await immediateAPI.get({
+        endpoint: `organization?code=${event.context.organization.code}`,
       });
       
-      debugLog("STEP_1_SUCCESS", {
-        directTokenLength: directToken?.length,
-        directTokenPrefix: directToken?.substring(0, 20),
+      debugLog("STEP_1_IMMEDIATE_SUCCESS", {
+        hasErrors: !!(immediateResult.data as any)?.errors,
+        responseData: immediateResult.data,
       });
-    } catch (directError) {
-      debugLog("STEP_1_ERROR", {
-        error: directError instanceof Error ? directError.message : 'Unknown error',
-        stack: directError instanceof Error ? directError.stack : 'No stack trace',
+      
+      // If this has errors, we found the customer's issue!
+      if ((immediateResult.data as any)?.errors) {
+        debugLog("CUSTOMER_ERROR_REPRODUCED", {
+          errors: (immediateResult.data as any).errors,
+        });
+        return; // Stop here to analyze the error
+      }
+      
+    } catch (immediateError) {
+      debugLog("STEP_1_IMMEDIATE_ERROR", {
+        error: immediateError instanceof Error ? immediateError.message : 'Unknown error',
+        stack: immediateError instanceof Error ? immediateError.stack : 'No stack trace',
+        likelyCustomerIssue: true,
       });
+      throw immediateError; // This is probably the customer's exact error
     }
 
     // Step 2: Test createKindeAPI with detailed logging
