@@ -4,13 +4,12 @@ import {
   WorkflowTrigger,
   createKindeAPI,
   accessTokenCustomClaims,
-  getM2MToken,
 } from "@kinde/infrastructure";
 
 // The setting for this workflow - matching customer's configuration
 export const workflowSettings: WorkflowSettings = {
   id: "onUserTokenGeneration",
-  name: "Custom Access Token Workflow (Testing Mode)",
+  name: "Custom Access Token Workflow",
   trigger: WorkflowTrigger.UserTokenGeneration,
   failurePolicy: {
     action: "stop",
@@ -23,245 +22,108 @@ export const workflowSettings: WorkflowSettings = {
   },
 };
 
-// Helper function to safely stringify objects
-function safeStringify(obj: any): string {
-  try {
-    return JSON.stringify(obj, null, 2);
-  } catch (error) {
-    return `[Stringify Error: ${error instanceof Error ? error.message : 'Unknown error'}]`;
-  }
-}
-
-// Helper function to create detailed logs
-function debugLog(stage: string, data: any) {
-  console.log(`🔍 [DEBUG-${stage}] ${safeStringify(data)}`);
-}
-
 // The workflow code to be executed when the event is triggered
-export default async function DebugWorkflow(event: onUserTokenGeneratedEvent) {
+export default async function Workflow(event: onUserTokenGeneratedEvent) {
   const startTime = Date.now();
   
   try {
-    debugLog("WORKFLOW_START", {
-      timestamp: new Date().toISOString(),
-      eventType: event.context.workflow.trigger,
-      orgCode: event.context.organization?.code,
-      userId: event.context.user?.id,
-      domain: event.context.domains?.kindeDomain,
-    });
-
-    // Step 1: Test immediate API creation (no pre-warming) - like customer's original
-    debugLog("STEP_1_IMMEDIATE_TEST", "Testing immediate createKindeAPI like customer");
+    console.log("🚀 Starting Custom Access Token Workflow");
+    console.log(`⏰ Start time: ${new Date().toISOString()}`);
     
-    try {
-      // Test the exact customer flow - immediate API creation and call
-      const immediateAPI = await createKindeAPI(event);
-      const immediateResult = await immediateAPI.get({
-        endpoint: `organization?code=${event.context.organization.code}`,
-      });
-      
-      debugLog("STEP_1_IMMEDIATE_SUCCESS", {
-        hasErrors: !!(immediateResult.data as any)?.errors,
-        responseData: immediateResult.data,
-      });
-      
-      // If this has errors, we found the customer's issue!
-      if ((immediateResult.data as any)?.errors) {
-        debugLog("CUSTOMER_ERROR_REPRODUCED", {
-          errors: (immediateResult.data as any).errors,
-        });
-        return; // Stop here to analyze the error
-      }
-      
-    } catch (immediateError) {
-      debugLog("STEP_1_IMMEDIATE_ERROR", {
-        error: immediateError instanceof Error ? immediateError.message : 'Unknown error',
-        stack: immediateError instanceof Error ? immediateError.stack : 'No stack trace',
-        likelyCustomerIssue: true,
-      });
-      throw immediateError; // This is probably the customer's exact error
-    }
-
-    // Step 2: Test createKindeAPI with detailed logging
-    debugLog("STEP_2_START", "Creating Kinde API with debugging");
+    // Log environment details
+    console.log(`🏢 Domain: ${event.context.domains.kindeDomain}`);
+    console.log(`📋 Org code: ${event.context.organization.code}`);
+    
+    // Create Kinde API instance using M2M credentials
+    console.log("🔑 Creating Kinde API instance...");
+    const apiCreateStart = Date.now();
     
     const kindeAPI = await createKindeAPI(event);
     
-    debugLog("STEP_2_SUCCESS", {
-      apiCreated: !!kindeAPI,
-      apiMethods: Object.keys(kindeAPI || {}),
-    });
-
-    // Step 3: Test organization API call with timing
-    const orgCode = event.context.organization?.code;
+    const apiCreateDuration = Date.now() - apiCreateStart;
+    console.log(`✅ Kinde API created in ${apiCreateDuration}ms`);
     
-    debugLog("STEP_3_START", {
-      orgCode,
-      endpoint: `organization?code=${orgCode}`,
-    });
-
+    const orgCode = event.context.organization.code;
+    console.log(`🔍 Fetching organization data for code: ${orgCode}`);
+    
+    // Make API call to get organization data
     const apiCallStart = Date.now();
     
-    try {
-      const { data: org } = await kindeAPI.get({
-        endpoint: `organization?code=${orgCode}`,
-      });
-
-      const apiCallDuration = Date.now() - apiCallStart;
+    const { data: org } = await kindeAPI.get({
+      endpoint: `organization?code=${orgCode}`,
+    });
+    
+    const apiCallDuration = Date.now() - apiCallStart;
+    console.log(`📊 API call completed in ${apiCallDuration}ms`);
+    
+    // Check for errors in response (customer's issue)
+    if ((org as any)?.errors) {
+      console.error("❌ CUSTOMER ERROR DETECTED in API response:");
+      console.error(JSON.stringify((org as any).errors, null, 2));
       
-      debugLog("STEP_3_SUCCESS", {
-        duration: apiCallDuration,
-        responseType: typeof org,
-        hasErrors: !!(org as any)?.errors,
-        orgData: org,
-      });
-
-      // Step 4: Check if response contains errors (customer's issue)
-      if ((org as any)?.errors) {
-        debugLog("CUSTOMER_ERROR_DETECTED", {
-          errors: (org as any).errors,
-          isInvalidCredentials: (org as any).errors.some((e: any) => 
-            e.code === "INVALID_CREDENTIALS"
-          ),
-          isTokenInvalid: (org as any).errors.some((e: any) => 
-            e.code === "TOKEN_INVALID"
-          ),
-        });
-        
-        // Don't throw - let's continue to see what happens
-      }
-
-      // Step 5: Test access token modification
-      debugLog("STEP_5_START", "Testing access token modification");
+      // Log error analysis
+      const hasInvalidCredentials = (org as any).errors.some((e: any) => e.code === "INVALID_CREDENTIALS");
+      const hasTokenInvalid = (org as any).errors.some((e: any) => e.code === "TOKEN_INVALID");
+      const hasBase64Error = (org as any).errors.some((e: any) => e.message?.includes("illegal base64 data"));
       
-      const accessToken = accessTokenCustomClaims<{
-        org_slug: string;
-        debug_info: any;
-      }>();
-
-      if (!(org as any)?.errors) {
-        accessToken.org_slug = (org as any).handle;
-      }
+      console.log(`🔍 Error analysis: InvalidCredentials=${hasInvalidCredentials}, TokenInvalid=${hasTokenInvalid}, Base64Error=${hasBase64Error}`);
       
-      // Add debug information to the token
-      accessToken.debug_info = {
-        workflow_execution_time: Date.now() - startTime,
-        token_refresh_tested: true,
-        org_api_call_duration: apiCallDuration,
-        timestamp: new Date().toISOString(),
-      };
-      
-      debugLog("STEP_5_SUCCESS", {
-        tokenClaims: {
-          org_slug: accessToken.org_slug,
-          debug_info: accessToken.debug_info,
-        },
-      });
-
-    } catch (orgError) {
-      const errorMessage = orgError instanceof Error ? orgError.message : 'Unknown error';
-      
-      debugLog("STEP_3_ERROR", {
-        error: errorMessage,
-        stack: orgError instanceof Error ? orgError.stack : 'No stack trace',
-        duration: Date.now() - apiCallStart,
-      });
-      
-      // Check if this is the customer's specific error
-      if (errorMessage.includes("illegal base64 data")) {
-        debugLog("CUSTOMER_BASE64_ERROR", {
-          exactError: errorMessage,
-          possibleCause: "Cache corruption or token validation failure",
-        });
-      }
-      
-      if (errorMessage.includes("INVALID_CREDENTIALS")) {
-        debugLog("CUSTOMER_CREDENTIALS_ERROR", {
-          exactError: errorMessage,
-          possibleCause: "Token expired and refresh failed",
-        });
-      }
-      
-      throw orgError;
+      // Don't throw yet - let's see if we can still set access token
+    } else {
+      console.log(`✅ Organization found: ${(org as any).name || 'Unknown'} (handle: ${(org as any).handle || 'null'})`);
     }
 
-    const totalDuration = Date.now() - startTime;
+    // Create custom access token claims
+    console.log("🎫 Creating custom access token claims...");
     
-    debugLog("WORKFLOW_SUCCESS", {
-      totalDuration,
-      success: true,
-      timestamp: new Date().toISOString(),
-    });
+    const accessToken = accessTokenCustomClaims<{
+      org_slug: string;
+    }>();
+
+    // Add the organization handle to the access token
+    if (!(org as any)?.errors) {
+      accessToken.org_slug = (org as any).handle;
+      console.log(`✅ Added org_slug: ${(org as any).handle}`);
+    } else {
+      console.log("⚠️ Skipping org_slug due to API errors");
+    }
+    
+    const totalDuration = Date.now() - startTime;
+    console.log(`🎉 Workflow completed successfully in ${totalDuration}ms`);
+    console.log(`⏰ End time: ${new Date().toISOString()}`);
+    
+    // If we had API errors, throw them now (after logging everything)
+    if ((org as any)?.errors) {
+      throw new Error(`API returned errors: ${JSON.stringify((org as any).errors)}`);
+    }
     
   } catch (error) {
     const totalDuration = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ Error in Custom Access Token Workflow (after ${totalDuration}ms):`);
+    console.error(`⏰ Error time: ${new Date().toISOString()}`);
     
-    debugLog("WORKFLOW_ERROR", {
-      error: errorMessage,
-      stack: error instanceof Error ? error.stack : 'No stack trace',
-      totalDuration,
-      timestamp: new Date().toISOString(),
-    });
-    
-    // Add error details to access token for debugging
-    try {
-      const accessToken = accessTokenCustomClaims<{
-        debug_error: any;
-      }>();
+    // Log detailed error information to help debug the credential issue
+    if (error instanceof Error) {
+      console.error(`🚨 Error message: ${error.message}`);
+      console.error(`📍 Error type: ${error.constructor.name}`);
       
-      accessToken.debug_error = {
-        message: errorMessage,
-        type: error instanceof Error ? error.constructor.name : 'Unknown',
-        timestamp: new Date().toISOString(),
-        duration: totalDuration,
-      };
+      // Check for specific error patterns
+      if (error.message.includes("illegal base64 data")) {
+        console.error("🔍 BASE64 CORRUPTION DETECTED - likely token cache issue");
+      }
+      if (error.message.includes("INVALID_CREDENTIALS")) {
+        console.error("🔍 INVALID CREDENTIALS - likely token expiration/refresh issue");
+      }
+      if (error.message.includes("TOKEN_INVALID")) {
+        console.error("🔍 TOKEN INVALID - likely token validation/corruption issue");
+      }
       
-      debugLog("ERROR_ADDED_TO_TOKEN", {
-        errorDetails: accessToken.debug_error,
-      });
-    } catch (tokenError) {
-      debugLog("TOKEN_ERROR_LOGGING_FAILED", {
-        tokenError: tokenError instanceof Error ? tokenError.message : 'Unknown token error',
-        originalError: errorMessage,
-      });
+      console.error(`📚 Error stack: ${error.stack}`);
+    } else {
+      console.error(`🔍 Non-Error object thrown: ${JSON.stringify(error)}`);
     }
     
     // Re-throw the error to trigger the failure policy
     throw error;
-  }
-}
-
-// Export a function to manually test token operations
-export async function testTokenOperations(event: onUserTokenGeneratedEvent) {
-  console.log("🧪 Manual Token Operations Test");
-  
-  try {
-    // Test 1: Direct token fetch
-    console.log("Test 1: Direct token fetch");
-    const token = await getM2MToken("manual_test_token", {
-      domain: event.context.domains.kindeDomain,
-      clientId: "test_client_id",
-      clientSecret: "test_client_secret", 
-      audience: [`${event.context.domains.kindeDomain}/api`],
-    });
-    console.log("✅ Direct token fetch successful", { tokenLength: token.length });
-    
-    // Test 2: API creation
-    console.log("Test 2: API creation");
-    const api = await createKindeAPI(event);
-    console.log("✅ API creation successful");
-    
-    // Test 3: Simple API call
-    console.log("Test 3: Simple API call");
-    const result = await api.get({ endpoint: "applications" });
-    console.log("✅ API call successful", { hasData: !!result.data });
-    
-    return { success: true, tests: 3 };
-    
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log("❌ Manual test failed:", errorMessage);
-    return { success: false, error: errorMessage };
   }
 } 
