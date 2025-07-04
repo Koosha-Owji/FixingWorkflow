@@ -44,33 +44,72 @@ export default async function Workflow(event: onUserTokenGeneratedEvent) {
     console.log(`✅ Kinde API created in ${apiCreateDuration}ms`);
     
     const orgCode = event.context.organization.code;
-    console.log(`🔍 Fetching organization data for code: ${orgCode}`);
+    console.log(`🔍 Making MULTIPLE API calls to trigger token reuse issue...`);
     
-    // Make API call to get organization data
-    const apiCallStart = Date.now();
+    // FIRST API CALL - Should work (customer pattern)
+    console.log(`🔍 [CALL 1] Fetching organization data for code: ${orgCode}`);
+    const apiCall1Start = Date.now();
     
-    const { data: org } = await kindeAPI.get({
+    const { data: org1 } = await kindeAPI.get({
       endpoint: `organization?code=${orgCode}`,
     });
     
-    const apiCallDuration = Date.now() - apiCallStart;
-    console.log(`📊 API call completed in ${apiCallDuration}ms`);
+    const apiCall1Duration = Date.now() - apiCall1Start;
+    console.log(`📊 [CALL 1] API call completed in ${apiCall1Duration}ms`);
     
-    // Check for errors in response (customer's issue)
-    if ((org as any)?.errors) {
-      console.error("❌ CUSTOMER ERROR DETECTED in API response:");
-      console.error(JSON.stringify((org as any).errors, null, 2));
+    // Check for errors in first response
+    if ((org1 as any)?.errors) {
+      console.error("❌ [CALL 1] CUSTOMER ERROR DETECTED in API response:");
+      console.error(JSON.stringify((org1 as any).errors, null, 2));
+    } else {
+      console.log(`✅ [CALL 1] Organization found: ${(org1 as any).name || 'Unknown'} (handle: ${(org1 as any).handle || 'null'})`);
+    }
+
+    // SECOND API CALL - Where customer's issue typically occurs
+    console.log(`🔍 [CALL 2] Making second API call (where corruption typically occurs)...`);
+    const apiCall2Start = Date.now();
+    
+    const { data: org2 } = await kindeAPI.get({
+      endpoint: `organization?code=${orgCode}`,
+    });
+    
+    const apiCall2Duration = Date.now() - apiCall2Start;
+    console.log(`📊 [CALL 2] API call completed in ${apiCall2Duration}ms`);
+    
+    // Check for errors in second response (customer's issue point)
+    if ((org2 as any)?.errors) {
+      console.error("❌ [CALL 2] CUSTOMER ERROR DETECTED in API response:");
+      console.error(JSON.stringify((org2 as any).errors, null, 2));
       
       // Log error analysis
-      const hasInvalidCredentials = (org as any).errors.some((e: any) => e.code === "INVALID_CREDENTIALS");
-      const hasTokenInvalid = (org as any).errors.some((e: any) => e.code === "TOKEN_INVALID");
-      const hasBase64Error = (org as any).errors.some((e: any) => e.message?.includes("illegal base64 data"));
+      const hasInvalidCredentials = (org2 as any).errors.some((e: any) => e.code === "INVALID_CREDENTIALS");
+      const hasTokenInvalid = (org2 as any).errors.some((e: any) => e.code === "TOKEN_INVALID");
+      const hasBase64Error = (org2 as any).errors.some((e: any) => e.message?.includes("illegal base64 data"));
       
-      console.log(`🔍 Error analysis: InvalidCredentials=${hasInvalidCredentials}, TokenInvalid=${hasTokenInvalid}, Base64Error=${hasBase64Error}`);
+      console.log(`🔍 [CALL 2] Error analysis: InvalidCredentials=${hasInvalidCredentials}, TokenInvalid=${hasTokenInvalid}, Base64Error=${hasBase64Error}`);
       
-      // Don't throw yet - let's see if we can still set access token
+      // This is the customer's exact issue - let's continue to see if we can still set access token
     } else {
-      console.log(`✅ Organization found: ${(org as any).name || 'Unknown'} (handle: ${(org as any).handle || 'null'})`);
+      console.log(`✅ [CALL 2] Organization found: ${(org2 as any).name || 'Unknown'} (handle: ${(org2 as any).handle || 'null'})`);
+    }
+
+    // THIRD API CALL - To further test token reuse
+    console.log(`🔍 [CALL 3] Making third API call to test token stability...`);
+    const apiCall3Start = Date.now();
+    
+    const { data: org3 } = await kindeAPI.get({
+      endpoint: `organization?code=${orgCode}`,
+    });
+    
+    const apiCall3Duration = Date.now() - apiCall3Start;
+    console.log(`📊 [CALL 3] API call completed in ${apiCall3Duration}ms`);
+    
+    // Check for errors in third response
+    if ((org3 as any)?.errors) {
+      console.error("❌ [CALL 3] CUSTOMER ERROR DETECTED in API response:");
+      console.error(JSON.stringify((org3 as any).errors, null, 2));
+    } else {
+      console.log(`✅ [CALL 3] Organization found: ${(org3 as any).name || 'Unknown'} (handle: ${(org3 as any).handle || 'null'})`);
     }
 
     // Create custom access token claims
@@ -80,21 +119,30 @@ export default async function Workflow(event: onUserTokenGeneratedEvent) {
       org_slug: string;
     }>();
 
-    // Add the organization handle to the access token
-    if (!(org as any)?.errors) {
-      accessToken.org_slug = (org as any).handle;
-      console.log(`✅ Added org_slug: ${(org as any).handle}`);
+    // Use the first successful org response (customer's pattern)
+    let orgHandle = null;
+    if (!(org1 as any)?.errors) {
+      orgHandle = (org1 as any).handle;
+    } else if (!(org2 as any)?.errors) {
+      orgHandle = (org2 as any).handle;
+    } else if (!(org3 as any)?.errors) {
+      orgHandle = (org3 as any).handle;
+    }
+
+    if (orgHandle) {
+      accessToken.org_slug = orgHandle;
+      console.log(`✅ Added org_slug: ${orgHandle}`);
     } else {
-      console.log("⚠️ Skipping org_slug due to API errors");
+      console.log("⚠️ Skipping org_slug due to API errors in all calls");
     }
     
     const totalDuration = Date.now() - startTime;
     console.log(`🎉 Workflow completed successfully in ${totalDuration}ms`);
     console.log(`⏰ End time: ${new Date().toISOString()}`);
     
-    // If we had API errors, throw them now (after logging everything)
-    if ((org as any)?.errors) {
-      throw new Error(`API returned errors: ${JSON.stringify((org as any).errors)}`);
+    // If ALL calls had errors, throw them now (after logging everything)
+    if ((org1 as any)?.errors && (org2 as any)?.errors && (org3 as any)?.errors) {
+      throw new Error(`All API calls returned errors. Last error: ${JSON.stringify((org3 as any).errors)}`);
     }
     
   } catch (error) {
