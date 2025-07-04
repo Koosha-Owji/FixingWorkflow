@@ -25,28 +25,20 @@ export const workflowSettings: WorkflowSettings = {
 // The workflow code to be executed when the event is triggered
 export default async function Workflow(event: onUserTokenGeneratedEvent) {
   try {
-    console.log("Starting Custom Access Token Workflow");
-    
-    // Create Kinde API instance using M2M credentials
     const kindeAPI = await createKindeAPI(event);
     const orgCode = event.context.organization.code;
 
-    console.log(`Fetching organization data for code: ${orgCode}`);
-    
-    // Make API call to get organization data
     const { data: org } = await kindeAPI.get({
-      endpoint: `organization?code=${orgCode}`,
+        endpoint: `organization?code=${ orgCode }`,
     });
 
-    console.log(`Organization found: ${JSON.stringify(org, null, 2)}`);
+    console.log(`Organization found: ${ JSON.stringify(org, null, 2) }`);
 
-    // Create custom access token claims
     const accessToken = accessTokenCustomClaims<{
-      org_slug: string;
+        org_slug: string;
     }>();
 
-    // Add the organization handle to the access token
-    accessToken.org_slug = (org as any).handle;
+    accessToken.org_slug = org.handle;
     
     console.log("Successfully added org_slug to access token");
     
