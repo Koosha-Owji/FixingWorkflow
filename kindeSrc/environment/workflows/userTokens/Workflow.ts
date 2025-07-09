@@ -30,8 +30,8 @@ export default async function handleTokenGeneration(event: onUserTokenGeneratedE
 
   // Define your test mapping
   const allowedOrgByClientId: Record<string, string> = {
-    "dc4e87a3451f4ad3860a1373f9e38188": "org_001",
-    "2e6a7360cea4428c81e5ee1ce84fa47f": "org_002",
+    "dc4e87a3451f4ad3860a1373f9e38188": "org_eb1fd735afaf",
+    "2e6a7360cea4428c81e5ee1ce84fa47f": "org_eb1fd735afaf",
   };
 
   const expectedOrgCode = allowedOrgByClientId[clientId];
