@@ -2,56 +2,51 @@ import {
   onUserTokenGeneratedEvent,
   WorkflowSettings,
   WorkflowTrigger,
-  createKindeAPI,
-  accessTokenCustomClaims,
+  denyAccess,
 } from "@kinde/infrastructure";
 
-// The setting for this workflow - matching customer's configuration
 export const workflowSettings: WorkflowSettings = {
-  id: "onUserTokenGeneration",
-  name: "Custom Access Token Workflow",
+  id: "testAppOrgIsolation",
+  name: "Test App-to-Org Restriction",
+  failurePolicy: { action: "stop" },
   trigger: WorkflowTrigger.UserTokenGeneration,
-  failurePolicy: {
-    action: "stop",
-  },
   bindings: {
-    "kinde.accessToken": {},
-    "kinde.fetch": {},
-    "kinde.env": {},
-    url: {},
+    "kinde.auth": {},
   },
 };
 
-// The workflow code to be executed when the event is triggered
-export default async function Workflow(event: onUserTokenGeneratedEvent) {
-  try {
-    const kindeAPI = await createKindeAPI(event);
-    const orgCode = event.context.organization.code;
+export default async function handleTokenGeneration(event: onUserTokenGeneratedEvent) {
+  const clientId = event.context.application.clientId;
+  const orgCode = event.context.organization.code;
+  const userId = event.context.user.id;
+  const isExistingSession = event.context.auth.isExistingSession;
 
-    const { data: org } = await kindeAPI.get({
-        endpoint: `organization?code=${ orgCode }`,
-    });
+  console.log("Token Generation Test", {
+    clientId,
+    orgCode,
+    userId,
+    isExistingSession, // This tells us if it's SSO or fresh login
+  });
 
-    console.log(`Organization found: ${ JSON.stringify(org, null, 2) }`);
+  // Define your test mapping
+  const allowedOrgByClientId: Record<string, string> = {
+    "YOUR_APP1_CLIENT_ID": "org_001",
+    "YOUR_APP2_CLIENT_ID": "org_002",
+  };
 
-    const accessToken = accessTokenCustomClaims<{
-        org_slug: string;
-    }>();
+  const expectedOrgCode = allowedOrgByClientId[clientId];
 
-    accessToken.org_slug = org.handle;
-    
-    console.log("Successfully added org_slug to access token");
-    
-  } catch (error) {
-    console.error("Error in Custom Access Token Workflow:", error);
-    
-    // Log detailed error information to help debug the credential issue
-    if (error instanceof Error) {
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
-    }
-    
-    // Re-throw the error to trigger the failure policy
-    throw error;
+  if (!expectedOrgCode) {
+    console.error(`Unknown client_id: ${clientId}`);
+    denyAccess("Unknown app");
+    return;
   }
-} 
+
+  if (orgCode !== expectedOrgCode) {
+    console.error(`Org mismatch: got ${orgCode}, expected ${expectedOrgCode}`);
+    denyAccess("Wrong org for this app");
+    return;
+  }
+
+  console.log(`✅ Access granted: ${orgCode} matches ${expectedOrgCode}`);
+}
