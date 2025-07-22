@@ -2,6 +2,8 @@ import {
   onUserTokenGeneratedEvent,
   WorkflowSettings,
   WorkflowTrigger,
+  idTokenCustomClaims,
+  accessTokenCustomClaims,
 } from "@kinde/infrastructure";
 
 export const workflowSettings: WorkflowSettings = {
@@ -18,15 +20,11 @@ export const workflowSettings: WorkflowSettings = {
 export default async function handleTokenGeneration(
   event: onUserTokenGeneratedEvent
 ) {
-  // Access the token bindings
-  const accessToken = event.bindings["kinde.accessToken"];
-  const idToken = event.bindings["kinde.idToken"];
+  // Use the infrastructure helpers to access all token claims
+  const idToken = idTokenCustomClaims<Record<string, any>>();
+  const accessToken = accessTokenCustomClaims<Record<string, any>>();
 
-  // Retrieve all existing claims
-  const idClaims = idToken.getAllClaims();
-  const accessClaims = accessToken.getAllClaims();
-
-  // Log them for inspection
-  console.log("ID Token Claims:", idClaims);
-  console.log("Access Token Claims:", accessClaims);
+  // Log all existing claims for inspection
+  console.log("ID Token Claims:", idToken);
+  console.log("Access Token Claims:", accessToken);
 }
