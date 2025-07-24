@@ -19,11 +19,26 @@ export const workflowSettings: WorkflowSettings = {
 };
 
 async function getUserWithOrganizations(userId: string) {
-  const token = getEnvironmentVariable("KINDE_API_TOKEN")?.value || "";
-  const url = `/api/v1/user?id=${userId}&expand=organizations`;
-
   try {
+    // Check environment variable
+    const tokenEnvVar = getEnvironmentVariable("KINDE_API_TOKEN");
+    console.log("Environment variable check:", {
+      exists: !!tokenEnvVar,
+      isSecret: tokenEnvVar?.isSecret,
+      hasValue: !!tokenEnvVar?.value,
+      valueLength: tokenEnvVar?.value?.length || 0
+    });
+    
+    const token = tokenEnvVar?.value || "";
+    if (!token) {
+      throw new Error("KINDE_API_TOKEN environment variable not found or empty");
+    }
+    
+    const url = `/api/v1/user?id=${userId}&expand=organizations`;
     console.log("Making API call to:", url);
+    console.log("Token length:", token.length);
+    console.log("Token starts with:", token.substring(0, 20) + "...");
+
     const response = await fetch(url, {
       method: "GET",
       responseFormat: "json",
@@ -33,16 +48,31 @@ async function getUserWithOrganizations(userId: string) {
       },
     });
 
+    console.log("=== FULL API RESPONSE ===");
+    console.log("Response object:", JSON.stringify(response, null, 2));
+
+    if (response.error) {
+      console.error("API Error:", response.error);
+      throw new Error(`API Error: ${JSON.stringify(response.error)}`);
+    }
+
     if (!response.data) {
-      throw new Error(`API call failed`);
+      console.error("No data in response");
+      throw new Error("No data returned from API");
     }
 
     const userData = response.data;
-    console.log("=== API RESPONSE: User data with organizations ===");
+    console.log("=== API SUCCESS: User data with organizations ===");
     console.log(JSON.stringify(userData, null, 2));
     return userData;
+    
   } catch (error) {
-    console.error("Error fetching user data:", error);
+    console.error("=== DETAILED ERROR INFO ===");
+    console.error("Error type:", typeof error);
+    console.error("Error constructor:", error.constructor.name);
+    console.error("Error message:", error.message);
+    console.error("Full error object:", JSON.stringify(error, null, 2));
+    console.error("Error stack:", error.stack);
     throw error;
   }
 }
