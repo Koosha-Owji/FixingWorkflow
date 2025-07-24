@@ -3,6 +3,7 @@ import {
   WorkflowSettings,
   WorkflowTrigger,
   createKindeAPI,
+  getEnvironmentVariable,
 } from "@kinde/infrastructure";
 
 export const workflowSettings: WorkflowSettings = {
@@ -11,19 +12,16 @@ export const workflowSettings: WorkflowSettings = {
   trigger: WorkflowTrigger.PostAuthentication,
   failurePolicy: { action: "stop" },
   bindings: {
-    "kinde.env": {
-      KINDE_M2M_CLIENT_ID: "1a7a4c85bfcc4b3caf7740014a2cffe3",
-      KINDE_M2M_CLIENT_SECRET: "O042lQwJOHAWJGtfmZwQu5NNOms3rlmPaTfdCbZsXBggqXwZfklS", 
-      KINDE_ISSUER_URL: "https://kooshaowji.kinde.com",
-    },
-    "kinde.fetch": {},
-    url: {},
+    "kinde.env": {},
+    "kinde.fetch": {}
   },
 };
 
 async function getUserWithOrganizations(userId: string, event: onUserPostAuthenticationEvent) {
   try {
-    console.log("=== FETCHING USER WITH ORGANIZATIONS ===");
+    const m2mClientId = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_ID")?.value;
+    const m2mClientSecret = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_SECRET")?.value;
+    const issuerUrl = getEnvironmentVariable("KINDE_WF_ISSUER_URL")?.value;
     
     // Get Kinde API instance
     const kindeAPI = await createKindeAPI(event);
