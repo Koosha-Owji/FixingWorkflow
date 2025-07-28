@@ -76,12 +76,29 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
               
               if (!hasRole) {
                 // Assign the Test role
+                console.log("=== PREPARING ROLE ASSIGNMENT REQUEST ===");
+                console.log("Endpoint:", `organizations/${orgCode}/users/${userId}/roles`);
+                console.log("Method: POST");
+                console.log("Body:", JSON.stringify({ "role_id": testRole.id }, null, 2));
+                console.log("Role ID being sent:", testRole.id);
+                console.log("Org Code:", orgCode);
+                console.log("User ID:", userId);
+                
                 const addRoleResponse = await kindeAPI.post({
                   endpoint: `organizations/${orgCode}/users/${userId}/roles`,
                   body: { "role_id": testRole.id },
                 });
                 console.log("=== ROLE ASSIGNMENT RESULT ===");
-                console.log("Add Role Response:", JSON.stringify(addRoleResponse, null, 2));
+                console.log("Response status:", addRoleResponse.status);
+                console.log("Full response:", JSON.stringify(addRoleResponse, null, 2));
+                
+                // Check if there are errors in the response
+                if (addRoleResponse.data?.errors) {
+                  console.log("=== API RETURNED ERRORS ===");
+                  addRoleResponse.data.errors.forEach((error: any, index: number) => {
+                    console.log(`Error ${index + 1}:`, error);
+                  });
+                }
               } else {
                 console.log("User already has the Test role, skipping assignment");
               }
