@@ -77,6 +77,26 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
         console.log("Role ID from env:", roleId);
         
         if (roleId) {
+          // First, check if user already has this role
+          try {
+            console.log("=== CHECKING EXISTING USER ROLES ===");
+            const { data: userRolesData } = await kindeAPI.get({
+              endpoint: `organizations/${orgCode}/users/${userId}/roles`,
+            });
+            console.log("User's current roles:", JSON.stringify(userRolesData, null, 2));
+            
+            const hasRole = userRolesData?.roles?.some((role: any) => role.id === roleId);
+            console.log("User already has this role:", hasRole);
+            
+            if (hasRole) {
+              console.log("=== ROLE ALREADY ASSIGNED ===");
+              console.log("User already has the role, skipping assignment");
+              return user; // Skip the role assignment
+            }
+          } catch (checkRoleError) {
+            console.error("Error checking user roles:", checkRoleError);
+          }
+          
           // Add user to role
           const addRoleEndpoint = `organizations/${orgCode}/users/${userId}/roles`;
           console.log("Role assignment endpoint:", addRoleEndpoint);
@@ -84,7 +104,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
           try {
             const addRoleResponse = await kindeAPI.post({
               endpoint: addRoleEndpoint,
-              body: { role_id: roleId },
+              body: { "role_id": roleId },
             });
             console.log("=== ROLE ASSIGNMENT SUCCESS ===");
             console.log("Add Role Response:", JSON.stringify(addRoleResponse, null, 2));
