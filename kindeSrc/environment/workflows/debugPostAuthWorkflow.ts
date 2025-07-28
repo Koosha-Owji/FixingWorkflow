@@ -53,6 +53,25 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
         console.log("=== ROLE ASSIGNMENT ===");
         console.log("Using organization code:", orgCode);
         
+        // First, let's fetch all available roles to see what's available
+        try {
+          console.log("=== FETCHING AVAILABLE ROLES ===");
+          const { data: rolesData } = await kindeAPI.get({
+            endpoint: `roles`,
+          });
+          console.log("Available roles:", JSON.stringify(rolesData, null, 2));
+          
+          // Show role IDs and keys for reference
+          if (rolesData?.roles) {
+            console.log("=== ROLE IDS FOR REFERENCE ===");
+            rolesData.roles.forEach((role: any) => {
+              console.log(`Role: ${role.name || role.key} | ID: ${role.id} | Key: ${role.key}`);
+            });
+          }
+        } catch (rolesError) {
+          console.error("Error fetching roles:", rolesError);
+        }
+        
         // Get role ID from environment variable
         const roleId = getEnvironmentVariable("USER_ROLE_ID")?.value;
         console.log("Role ID from env:", roleId);
