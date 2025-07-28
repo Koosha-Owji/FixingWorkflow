@@ -3,6 +3,7 @@ import {
   WorkflowSettings,
   WorkflowTrigger,
   createKindeAPI,
+  getEnvironmentVariable,
 } from "@kinde/infrastructure";
 
 export const workflowSettings: WorkflowSettings = {
@@ -20,51 +21,84 @@ export const workflowSettings: WorkflowSettings = {
 async function getUserWithOrganizations(userId: string, event: onUserPostAuthenticationEvent) {
   try {
     console.log("=== FETCHING USER WITH ORGANIZATIONS ===");
-
+    
     // Get Kinde API instance
     const kindeAPI = await createKindeAPI(event);
-
+    
     // Get user details with organizations expanded
     const endpoint = `user?id=${userId}&expand=organizations`;
     console.log("API endpoint:", endpoint);
-
+    
     const { data: user } = await kindeAPI.get({
       endpoint: endpoint,
     });
-
+    
     console.log("=== USER API RESPONSE ===");
     console.log("Full user object:", JSON.stringify(user, null, 2));
-
+    
     // Check if organizations exist
     if (user?.organizations && user.organizations.length > 0) {
       console.log("=== ORGANIZATIONS FOUND ===");
       console.log("Number of organizations:", user.organizations.length);
-
+      
       // Log each organization
       user.organizations.forEach((org: any, index: number) => {
         console.log(`Organization ${index + 1}:`, JSON.stringify(org, null, 2));
       });
-
+      
+      // Get the first organization for role assignment
+      const firstOrg = user.organizations[0];
+      const orgCode = firstOrg?.code;
+      
+      if (orgCode) {
+        console.log("=== ROLE ASSIGNMENT ===");
+        console.log("Using organization code:", orgCode);
+        
+        // Get role ID from environment variable
+        const roleId = getEnvironmentVariable("USER_ROLE_ID")?.value;
+        console.log("Role ID from env:", roleId);
+        
+        if (roleId) {
+          // Add user to role
+          const addRoleEndpoint = `organizations/${orgCode}/users/${userId}/roles`;
+          console.log("Role assignment endpoint:", addRoleEndpoint);
+          
+          try {
+            const addRoleResponse = await kindeAPI.post({
+              endpoint: addRoleEndpoint,
+              body: { role_id: roleId },
+            });
+            console.log("=== ROLE ASSIGNMENT SUCCESS ===");
+            console.log("Add Role Response:", JSON.stringify(addRoleResponse, null, 2));
+          } catch (roleError) {
+            console.error("=== ROLE ASSIGNMENT ERROR ===");
+            console.error("Role assignment failed:", roleError);
+          }
+        } else {
+          console.log("No USER_ROLE_ID environment variable found - skipping role assignment");
+        }
+      }
+      
       // If we want to get more details about the first organization
       const firstOrgCode = user.organizations[0]?.code;
       if (firstOrgCode) {
         console.log("=== FETCHING DETAILED ORG INFO ===");
         console.log("Organization code:", firstOrgCode);
-
+        
         const { data: organization } = await kindeAPI.get({
           endpoint: `organization?code=${firstOrgCode}`,
         });
-
+        
         console.log("=== DETAILED ORGANIZATION RESPONSE ===");
         console.log("Full organization object:", JSON.stringify(organization, null, 2));
       }
     } else {
       console.log("=== NO ORGANIZATIONS FOUND ===");
-      console.log("User is not a member of any organizations");
+      console.log("User is not a member of any organizations - cannot assign roles");
     }
-
+    
     return user;
-
+    
   } catch (error) {
     console.error("=== ERROR FETCHING USER DATA ===");
     console.error("Error type:", typeof error);
@@ -79,11 +113,11 @@ export default async function handlePostAuthentication(
   // Log the entire event object to see what's available
   console.log("=== POST AUTHENTICATION EVENT ===");
   console.log("Full event object:", JSON.stringify(event, null, 2));
-
+  
   // Log specific event properties if they exist
   if (event.context?.user) {
     console.log("User data:", event.context.user);
-
+    
     // Try to get full user details with organizations if we have a user ID
     if (event.context.user.id) {
       try {
@@ -94,7 +128,7 @@ export default async function handlePostAuthentication(
       }
     }
   }
-
+  
   if (event.context?.auth) {
     console.log("Auth data:", event.context.auth);
   }
@@ -105,7 +139,7 @@ export default async function handlePostAuthentication(
 
   // Log all available properties on the event
   console.log("Event keys:", Object.keys(event));
-
+  
   // Try to access any other properties that might be on the event
   for (const key in event) {
     if (event.hasOwnProperty(key)) {
