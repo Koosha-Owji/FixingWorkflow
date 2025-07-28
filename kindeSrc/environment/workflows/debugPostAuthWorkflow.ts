@@ -24,7 +24,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
     console.log("=== FETCHING USER WITH ORGANIZATIONS ===");
     
     // Get Kinde API instance (will use KINDE_WF_M2M_CLIENT_ID and KINDE_WF_M2M_CLIENT_SECRET)
-    const kindeAPI = await createKindeAPI(event);
+    const kindeAPI = await createKindeAPI(event, { skipCache: true });
     
     // Get user details with organizations expanded
     const { data: user } = await kindeAPI.get({
@@ -85,7 +85,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
                 // Try regular kindeAPI approach
                 const addRoleResponse = await kindeAPI.post({
                   endpoint: `organizations/${orgCode}/users/${userId}/roles`,
-                  body: { "role_id": testRole.id },
+                  params: { "role_id": testRole.id },
                 });
                 
                 console.log(`=== ROLE ASSIGNMENT RESULT FOR ${orgCode} ===`);
