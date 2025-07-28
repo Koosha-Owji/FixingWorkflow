@@ -53,28 +53,30 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
         console.log("=== ROLE ASSIGNMENT ===");
         console.log("Using organization code:", orgCode);
         
-        // First, let's fetch all available roles to see what's available
-        try {
-          console.log("=== FETCHING AVAILABLE ROLES ===");
-          const { data: rolesData } = await kindeAPI.get({
-            endpoint: `roles`,
-          });
-          console.log("Available roles:", JSON.stringify(rolesData, null, 2));
-          
-          // Show role IDs and keys for reference
-          if (rolesData?.roles) {
-            console.log("=== ROLE IDS FOR REFERENCE ===");
-            rolesData.roles.forEach((role: any) => {
-              console.log(`Role: ${role.name || role.key} | ID: ${role.id} | Key: ${role.key}`);
+                  // First, let's fetch all available roles to see what's available
+          let roleId = null;
+          try {
+            console.log("=== FETCHING AVAILABLE ROLES ===");
+            const { data: rolesData } = await kindeAPI.get({
+              endpoint: `roles`,
             });
+            console.log("Available roles:", JSON.stringify(rolesData, null, 2));
+            
+            // Show role IDs and keys for reference
+            if (rolesData?.roles && rolesData.roles.length > 0) {
+              console.log("=== ROLE IDS FOR REFERENCE ===");
+              rolesData.roles.forEach((role: any) => {
+                console.log(`Role: ${role.name || role.key} | ID: ${role.id} | Key: ${role.key}`);
+              });
+              
+              // Use the first available role (or you could filter for a specific one)
+              roleId = rolesData.roles[0].id;
+              console.log("Using first available role ID:", roleId);
+              console.log("Role name:", rolesData.roles[0].name || rolesData.roles[0].key);
+            }
+          } catch (rolesError) {
+            console.error("Error fetching roles:", rolesError);
           }
-        } catch (rolesError) {
-          console.error("Error fetching roles:", rolesError);
-        }
-        
-        // Get role ID from environment variable
-        const roleId = getEnvironmentVariable("USER_ROLE_ID")?.value;
-        console.log("Role ID from env:", roleId);
         
         if (roleId) {
           // First, check if user already has this role
