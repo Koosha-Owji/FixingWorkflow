@@ -44,11 +44,11 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
         console.log(`Organization ${index + 1}:`, JSON.stringify(org, null, 2));
       });
       
-      // Get the first organization for role assignment
-      const orgCode = user.organizations[0];
-      
-      if (orgCode) {
-        console.log("=== ROLE ASSIGNMENT ===");
+      // Try role assignment with both organizations
+      for (let orgIndex = 0; orgIndex < user.organizations.length; orgIndex++) {
+        const orgCode = user.organizations[orgIndex];
+        
+        console.log(`=== ROLE ASSIGNMENT - ORGANIZATION ${orgIndex + 1} ===`);
         console.log("Using organization code:", orgCode);
         
         // Fetch all available roles
@@ -66,70 +66,49 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
             console.log("Using Test role ID:", testRole.id);
             console.log("Role name:", testRole.name);
             
-            // Check if user already has this role
+            // Check if user already has this role in this organization
             try {
               const { data: userRolesData } = await kindeAPI.get({
                 endpoint: `organizations/${orgCode}/users/${userId}/roles`,
               });
-              console.log("User's current roles:", JSON.stringify(userRolesData, null, 2));
+              console.log(`User's current roles in ${orgCode}:`, JSON.stringify(userRolesData, null, 2));
               
               const hasRole = userRolesData?.roles?.some((role: any) => role.id === testRole.id);
-              console.log("User already has Test role:", hasRole);
+              console.log("User already has Test role in this org:", hasRole);
               
               if (!hasRole) {
-                // Try using secureFetch for the role assignment
-                console.log("=== PREPARING SECURE ROLE ASSIGNMENT REQUEST ===");
-                console.log("Using secureFetch for role assignment");
-                console.log("Endpoint:", `organizations/${orgCode}/users/${userId}/roles`);
-                console.log("Method: POST");
-                console.log("Body:", JSON.stringify({ "role_id": testRole.id }, null, 2));
+                console.log(`=== ATTEMPTING ROLE ASSIGNMENT IN ${orgCode} ===`);
                 console.log("Role ID being sent:", testRole.id);
                 console.log("Org Code:", orgCode);
                 console.log("User ID:", userId);
                 
-                // Get domain from event context
-                const domain = event.context.domains.kindeDomain;
-                const fullUrl = `${domain}/api/v1/organizations/${orgCode}/users/${userId}/roles`;
-                console.log("Full URL:", fullUrl);
+                // Try regular kindeAPI approach
+                const addRoleResponse = await kindeAPI.post({
+                  endpoint: `organizations/${orgCode}/users/${userId}/roles`,
+                  body: { "role_id": testRole.id },
+                });
                 
-                try {
-                  const secureResponse = await secureFetch(fullUrl, {
-                    method: "POST",
-                    responseFormat: "json",
-                    headers: {
-                      "Content-Type": "application/json"
-                    },
-                    body: { "role_id": testRole.id }
-                  });
-                  
-                  console.log("=== SECURE FETCH ROLE ASSIGNMENT RESULT ===");
-                  console.log("Secure fetch response:", JSON.stringify(secureResponse, null, 2));
-                  
-                  if (secureResponse.data?.errors) {
-                    console.log("=== SECURE FETCH API RETURNED ERRORS ===");
-                    secureResponse.data.errors.forEach((error: any, index: number) => {
+                console.log(`=== ROLE ASSIGNMENT RESULT FOR ${orgCode} ===`);
+                console.log("Response status:", addRoleResponse.status);
+                console.log("Full response:", JSON.stringify(addRoleResponse, null, 2));
+                
+                // Check if this organization worked
+                if (!addRoleResponse.data?.errors) {
+                  console.log(`🎉 SUCCESS! Role assigned in organization: ${orgCode}`);
+                  return user; // Exit early on success
+                } else {
+                  console.log(`❌ Failed in organization: ${orgCode}`);
+                  if (addRoleResponse.data?.errors) {
+                    addRoleResponse.data.errors.forEach((error: any, index: number) => {
                       console.log(`Error ${index + 1}:`, error);
                     });
                   }
-                } catch (secureError) {
-                  console.error("=== SECURE FETCH ERROR ===");
-                  console.error("Secure fetch failed:", secureError);
-                  
-                  // Fallback to regular kindeAPI approach
-                  console.log("=== FALLBACK TO REGULAR API ===");
-                  const addRoleResponse = await kindeAPI.post({
-                    endpoint: `organizations/${orgCode}/users/${userId}/roles`,
-                    body: { "role_id": testRole.id },
-                  });
-                  console.log("=== FALLBACK ROLE ASSIGNMENT RESULT ===");
-                  console.log("Response status:", addRoleResponse.status);
-                  console.log("Full response:", JSON.stringify(addRoleResponse, null, 2));
                 }
               } else {
-                console.log("User already has the Test role, skipping assignment");
+                console.log(`User already has the Test role in ${orgCode}, skipping assignment`);
               }
             } catch (roleError) {
-              console.error("Error in role assignment:", roleError);
+              console.error(`Error in role assignment for ${orgCode}:`, roleError);
             }
           } else {
             console.log("Test role not found in available roles");
@@ -137,6 +116,8 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
         } catch (rolesError) {
           console.error("Error fetching roles:", rolesError);
         }
+        
+        console.log(`=== END OF ATTEMPT FOR ${orgCode} ===\n`);
       }
     } else {
       console.log("=== NO ORGANIZATIONS FOUND ===");
