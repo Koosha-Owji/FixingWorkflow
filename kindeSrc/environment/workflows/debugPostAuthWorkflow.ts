@@ -85,7 +85,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
                 // Try regular kindeAPI approach
                 const addRoleResponse = await kindeAPI.post({
                   endpoint: `organizations/${orgCode}/users/${userId}/roles`,
-                  params: { "role_id": testRole.id },
+                  body: { "role_id": testRole.id },
                 });
                 
                 console.log(`=== ROLE ASSIGNMENT RESULT FOR ${orgCode} ===`);
