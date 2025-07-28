@@ -3,6 +3,7 @@ import {
   WorkflowSettings,
   WorkflowTrigger,
   createKindeAPI,
+  secureFetch,
 } from "@kinde/infrastructure";
 
 export const workflowSettings: WorkflowSettings = {
@@ -13,6 +14,7 @@ export const workflowSettings: WorkflowSettings = {
   bindings: {
     "kinde.env": {},
     "kinde.fetch": {},
+    "kinde.secureFetch": {},
     url: {}
   },
 };
@@ -75,8 +77,9 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
               console.log("User already has Test role:", hasRole);
               
               if (!hasRole) {
-                // Assign the Test role
-                console.log("=== PREPARING ROLE ASSIGNMENT REQUEST ===");
+                // Try using secureFetch for the role assignment
+                console.log("=== PREPARING SECURE ROLE ASSIGNMENT REQUEST ===");
+                console.log("Using secureFetch for role assignment");
                 console.log("Endpoint:", `organizations/${orgCode}/users/${userId}/roles`);
                 console.log("Method: POST");
                 console.log("Body:", JSON.stringify({ "role_id": testRole.id }, null, 2));
@@ -84,20 +87,43 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
                 console.log("Org Code:", orgCode);
                 console.log("User ID:", userId);
                 
-                const addRoleResponse = await kindeAPI.post({
-                  endpoint: `organizations/${orgCode}/users/${userId}/roles`,
-                  body: { "role_id": testRole.id },
-                });
-                console.log("=== ROLE ASSIGNMENT RESULT ===");
-                console.log("Response status:", addRoleResponse.status);
-                console.log("Full response:", JSON.stringify(addRoleResponse, null, 2));
+                // Get domain from event context
+                const domain = event.context.domains.kindeDomain;
+                const fullUrl = `${domain}/api/v1/organizations/${orgCode}/users/${userId}/roles`;
+                console.log("Full URL:", fullUrl);
                 
-                // Check if there are errors in the response
-                if (addRoleResponse.data?.errors) {
-                  console.log("=== API RETURNED ERRORS ===");
-                  addRoleResponse.data.errors.forEach((error: any, index: number) => {
-                    console.log(`Error ${index + 1}:`, error);
+                try {
+                  const secureResponse = await secureFetch(fullUrl, {
+                    method: "POST",
+                    responseFormat: "json",
+                    headers: {
+                      "Content-Type": "application/json"
+                    },
+                    body: { "role_id": testRole.id }
                   });
+                  
+                  console.log("=== SECURE FETCH ROLE ASSIGNMENT RESULT ===");
+                  console.log("Secure fetch response:", JSON.stringify(secureResponse, null, 2));
+                  
+                  if (secureResponse.data?.errors) {
+                    console.log("=== SECURE FETCH API RETURNED ERRORS ===");
+                    secureResponse.data.errors.forEach((error: any, index: number) => {
+                      console.log(`Error ${index + 1}:`, error);
+                    });
+                  }
+                } catch (secureError) {
+                  console.error("=== SECURE FETCH ERROR ===");
+                  console.error("Secure fetch failed:", secureError);
+                  
+                  // Fallback to regular kindeAPI approach
+                  console.log("=== FALLBACK TO REGULAR API ===");
+                  const addRoleResponse = await kindeAPI.post({
+                    endpoint: `organizations/${orgCode}/users/${userId}/roles`,
+                    body: { "role_id": testRole.id },
+                  });
+                  console.log("=== FALLBACK ROLE ASSIGNMENT RESULT ===");
+                  console.log("Response status:", addRoleResponse.status);
+                  console.log("Full response:", JSON.stringify(addRoleResponse, null, 2));
                 }
               } else {
                 console.log("User already has the Test role, skipping assignment");
