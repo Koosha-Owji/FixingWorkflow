@@ -47,8 +47,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
       });
       
       // Get the first organization for role assignment
-      const firstOrg = user.organizations[0];
-      const orgCode = firstOrg?.code;
+      const orgCode = user.organizations[0]; // organizations are strings, not objects
       
       if (orgCode) {
         console.log("=== ROLE ASSIGNMENT ===");
@@ -80,7 +79,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
       }
       
       // If we want to get more details about the first organization
-      const firstOrgCode = user.organizations[0]?.code;
+      const firstOrgCode = user.organizations[0]; // organizations are strings, not objects
       if (firstOrgCode) {
         console.log("=== FETCHING DETAILED ORG INFO ===");
         console.log("Organization code:", firstOrgCode);
