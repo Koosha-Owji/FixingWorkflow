@@ -21,23 +21,52 @@ export const workflowSettings: WorkflowSettings = {
   },
 };
 
+interface AzureADClaims {
+  groups?: string[];
+  tid?: string;
+}
+
 export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   console.log("Starting role assignment test");
 
+  // Extract Azure AD groups and tenancyId from the event
+  const claims = (event.context.auth as any).provider?.data?.idToken?.claims as AzureADClaims;
+  const adGroups = claims?.groups || [];
+  const tenancyId = claims?.tid;
   const userId = event.context.user.id;
+
+  console.log("Azure AD Claims:", JSON.stringify(claims, null, 2));
+  console.log("AD Groups:", adGroups);
+  console.log("Tenancy ID:", tenancyId);
 
   // Get environment variables
   const TEST_ROLE_ID = getEnvironmentVariable("TEST_ROLE_ID")?.value;
   const TEST_ORG_ID = getEnvironmentVariable("TEST_ORG_ID")?.value;
+  const AIRNZ_TENANCY_ID = getEnvironmentVariable("AIRNZ_TENANCY_ID")?.value;
+  const AIRNZ_EMPLOYER_GROUP_ID = getEnvironmentVariable("AIRNZ_EMPLOYER_GROUP_ID")?.value;
+  const AIRNZ_EMPLOYEE_GROUP_ID = getEnvironmentVariable("AIRNZ_EMPLOYEE_GROUP_ID")?.value;
+  const EMPLOYER_ROLE_ID = getEnvironmentVariable("EMPLOYER_ROLE_ID")?.value;
+  const EMPLOYEE_ROLE_ID = getEnvironmentVariable("EMPLOYEE_ROLE_ID")?.value;
 
   console.log("TEST_ROLE_ID:", TEST_ROLE_ID);
   console.log("TEST_ORG_ID:", TEST_ORG_ID);
+  console.log("AIRNZ_TENANCY_ID:", AIRNZ_TENANCY_ID);
+  console.log("EMPLOYER_ROLE_ID:", EMPLOYER_ROLE_ID);
+  console.log("EMPLOYEE_ROLE_ID:", EMPLOYEE_ROLE_ID);
   console.log("User ID:", userId);
 
-  if (!TEST_ROLE_ID || !TEST_ORG_ID) {
-    console.error("Missing environment variables: TEST_ROLE_ID or TEST_ORG_ID");
+  if (!TEST_ORG_ID) {
+    console.error("Missing environment variable: TEST_ORG_ID");
     return;
   }
+
+  // Check if tenancyId matches AIRNZ_TENANCY_ID (skip if not set for testing)
+  if (AIRNZ_TENANCY_ID && tenancyId !== AIRNZ_TENANCY_ID) {
+    console.log("Tenancy ID doesn't match, skipping");
+    return;
+  }
+
+  console.log("Processing user...");
 
   // Get Kinde API instance
   const kindeAPI = await createKindeAPI(event);
@@ -60,24 +89,56 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   });
   console.log("User Roles Response:", JSON.stringify(userRolesData, null, 2));
 
-  // Check if user already has the role
-  const userHasRole = userRolesData?.roles?.find((role: any) => role.id === TEST_ROLE_ID);
+  const userRoles = userRolesData?.roles || [];
 
-  if (!userHasRole) {
-    console.log("Assigning role to user...");
-    // Add role to user
-    const addRoleResponse = await kindeAPI.post({
-      endpoint: `organizations/${TEST_ORG_ID}/users/${userId}/roles`,
-      params: { role_id: TEST_ROLE_ID },
-    });
-    console.log("Add Role Response:", JSON.stringify(addRoleResponse, null, 2));
-
-    if (!addRoleResponse.data?.errors) {
-      console.log("✅ Role assigned successfully");
+  // Test basic role assignment first
+  if (TEST_ROLE_ID) {
+    const userHasTestRole = userRoles.find((role: any) => role.id === TEST_ROLE_ID);
+    if (!userHasTestRole) {
+      console.log("Assigning test role...");
+      const addTestRoleResponse = await kindeAPI.post({
+        endpoint: `organizations/${TEST_ORG_ID}/users/${userId}/roles`,
+        params: { role_id: TEST_ROLE_ID },
+      });
+      console.log("Add Test Role Response:", JSON.stringify(addTestRoleResponse, null, 2));
     } else {
-      console.log("❌ Role assignment failed");
+      console.log("User already has test role");
     }
-  } else {
-    console.log("User already has the role");
+  }
+
+  // Test employer role assignment
+  if (EMPLOYER_ROLE_ID && AIRNZ_EMPLOYER_GROUP_ID) {
+    const isEmployer = adGroups.includes(AIRNZ_EMPLOYER_GROUP_ID);
+    const userHasEmployerRole = userRoles.find((role: any) => role.id === EMPLOYER_ROLE_ID);
+    
+    console.log("Is Employer:", isEmployer);
+    console.log("User has Employer Role:", !!userHasEmployerRole);
+
+    if (isEmployer && !userHasEmployerRole) {
+      console.log("Assigning employer role...");
+      const addEmployerResponse = await kindeAPI.post({
+        endpoint: `organizations/${TEST_ORG_ID}/users/${userId}/roles`,
+        params: { role_id: EMPLOYER_ROLE_ID },
+      });
+      console.log("Add Employer Role Response:", JSON.stringify(addEmployerResponse, null, 2));
+    }
+  }
+
+  // Test employee role assignment
+  if (EMPLOYEE_ROLE_ID && AIRNZ_EMPLOYEE_GROUP_ID) {
+    const isEmployee = adGroups.includes(AIRNZ_EMPLOYEE_GROUP_ID);
+    const userHasEmployeeRole = userRoles.find((role: any) => role.id === EMPLOYEE_ROLE_ID);
+    
+    console.log("Is Employee:", isEmployee);
+    console.log("User has Employee Role:", !!userHasEmployeeRole);
+
+    if (isEmployee && !userHasEmployeeRole) {
+      console.log("Assigning employee role...");
+      const addEmployeeResponse = await kindeAPI.post({
+        endpoint: `organizations/${TEST_ORG_ID}/users/${userId}/roles`,
+        params: { role_id: EMPLOYEE_ROLE_ID },
+      });
+      console.log("Add Employee Role Response:", JSON.stringify(addEmployeeResponse, null, 2));
+    }
   }
 }
