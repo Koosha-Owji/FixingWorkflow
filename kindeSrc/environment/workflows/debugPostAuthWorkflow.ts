@@ -1,115 +1,83 @@
 import {
-  onUserPostAuthenticationEvent,
+  onPostAuthenticationEvent,
   WorkflowSettings,
   WorkflowTrigger,
+  getEnvironmentVariable,
   createKindeAPI,
 } from "@kinde/infrastructure";
 
+// The settings for this workflow
 export const workflowSettings: WorkflowSettings = {
-  id: "debugPostAuthWorkflow",
-  name: "Debug Post Authentication Workflow",
+  id: "postAuthentication",
+  name: "Test Role Assignment",
+  failurePolicy: {
+    action: "stop",
+  },
   trigger: WorkflowTrigger.PostAuthentication,
-  failurePolicy: { action: "stop" },
   bindings: {
     "kinde.env": {},
     "kinde.fetch": {},
-    url: {}
+    url: {},
   },
 };
 
-async function getUserWithOrganizations(userId: string, event: onUserPostAuthenticationEvent) {
-  try {
-    console.log("Starting role assignment workflow for user:", userId);
-    
-    // Get Kinde API instance (will use KINDE_WF_M2M_CLIENT_ID and KINDE_WF_M2M_CLIENT_SECRET)
-    const kindeAPI = await createKindeAPI(event, { skipCache: true });
-    
-    // Get user details with organizations expanded
-    const { data: user } = await kindeAPI.get({
-      endpoint: `user?id=${userId}&expand=organizations`,
+export default async function handlePostAuth(event: onPostAuthenticationEvent) {
+  console.log("Starting role assignment test");
+
+  const userId = event.context.user.id;
+
+  // Get environment variables
+  const TEST_ROLE_ID = getEnvironmentVariable("TEST_ROLE_ID")?.value;
+  const TEST_ORG_ID = getEnvironmentVariable("TEST_ORG_ID")?.value;
+
+  console.log("TEST_ROLE_ID:", TEST_ROLE_ID);
+  console.log("TEST_ORG_ID:", TEST_ORG_ID);
+  console.log("User ID:", userId);
+
+  if (!TEST_ROLE_ID || !TEST_ORG_ID) {
+    console.error("Missing environment variables: TEST_ROLE_ID or TEST_ORG_ID");
+    return;
+  }
+
+  // Get Kinde API instance
+  const kindeAPI = await createKindeAPI(event);
+
+  // Get user details
+  const { data: user } = await kindeAPI.get({
+    endpoint: `user?id=${userId}&expand=organizations`,
+  });
+  console.log("User Response:", JSON.stringify(user, null, 2));
+
+  // Get organization details
+  const { data: organization } = await kindeAPI.get({
+    endpoint: `organization?code=${TEST_ORG_ID}`,
+  });
+  console.log("Organization Response:", JSON.stringify(organization, null, 2));
+
+  // Get user's current roles in the organization
+  const { data: userRolesData } = await kindeAPI.get({
+    endpoint: `organizations/${TEST_ORG_ID}/users/${userId}/roles`,
+  });
+  console.log("User Roles Response:", JSON.stringify(userRolesData, null, 2));
+
+  // Check if user already has the role
+  const userHasRole = userRolesData?.roles?.find((role: any) => role.id === TEST_ROLE_ID);
+
+  if (!userHasRole) {
+    console.log("Assigning role to user...");
+    // Add role to user
+    const addRoleResponse = await kindeAPI.post({
+      endpoint: `organizations/${TEST_ORG_ID}/users/${userId}/roles`,
+      params: { role_id: TEST_ROLE_ID },
     });
-    console.log("User API response:", JSON.stringify(user, null, 2));
-    
-    // Check if organizations exist
-    if (user?.organizations && user.organizations.length > 0) {
-      console.log(`User belongs to ${user.organizations.length} organization(s)`);
-      
-      // Try role assignment with both organizations
-      for (let orgIndex = 0; orgIndex < user.organizations.length; orgIndex++) {
-        const orgCode = user.organizations[orgIndex];
-        
-        console.log(`Attempting role assignment in organization: ${orgCode}`);
-        
-        try {
-          // Fetch all available roles
-          const { data: rolesData } = await kindeAPI.get({
-            endpoint: `roles`,
-          });
-          console.log("Available roles response:", JSON.stringify(rolesData, null, 2));
-          
-          // Find the Test role
-          const testRole = rolesData?.roles?.find((role: any) => role.key === "Test");
-          if (testRole) {
-            console.log(`Found Test role (${testRole.id})`);
-            
-            // Check if user already has this role in this organization
-            const { data: userRolesData } = await kindeAPI.get({
-              endpoint: `organizations/${orgCode}/users/${userId}/roles`,
-            });
-            console.log(`User roles in ${orgCode} response:`, JSON.stringify(userRolesData, null, 2));
-            
-            const hasRole = userRolesData?.roles?.some((role: any) => role.id === testRole.id);
-            
-            if (!hasRole) {
-              // Assign the Test role
-              const addRoleResponse = await kindeAPI.post({
-                endpoint: `organizations/${orgCode}/users/${userId}/roles`,
-                params: { "role_id": testRole.id },
-              });
-              console.log(`Role assignment response for ${orgCode}:`, JSON.stringify(addRoleResponse, null, 2));
-              
-              // Check if this organization worked
-              if (!addRoleResponse.data?.errors) {
-                console.log(`✅ Successfully assigned Test role to user in organization: ${orgCode}`);
-                return user; // Exit on success
-              } else {
-                console.log(`❌ Failed to assign role in organization: ${orgCode}`);
-                if (addRoleResponse.data?.errors) {
-                  addRoleResponse.data.errors.forEach((error: any) => {
-                    console.error(`Error: ${error.code} - ${error.message}`);
-                  });
-                }
-              }
-            } else {
-              console.log(`User already has Test role in organization: ${orgCode}`);
-            }
-          } else {
-            console.log("Test role not found in available roles");
-          }
-        } catch (roleError) {
-          console.error(`Error processing role assignment for ${orgCode}:`, roleError);
-        }
-      }
+    console.log("Add Role Response:", JSON.stringify(addRoleResponse, null, 2));
+
+    if (!addRoleResponse.data?.errors) {
+      console.log("✅ Role assigned successfully");
     } else {
-      console.log("User is not a member of any organizations");
+      console.log("❌ Role assignment failed");
     }
-    
-    return user;
-    
-  } catch (error) {
-    console.error("Error in role assignment workflow:", error);
-    throw error;
+  } else {
+    console.log("User already has the role");
   }
 }
-
-export default async function handlePostAuthentication(
-  event: onUserPostAuthenticationEvent
-) {
-  if (event.context?.user?.id) {
-    try {
-      await getUserWithOrganizations(event.context.user.id, event);
-    } catch (error) {
-      console.error("Role assignment workflow failed:", error);
-    }
-  }
-} 
