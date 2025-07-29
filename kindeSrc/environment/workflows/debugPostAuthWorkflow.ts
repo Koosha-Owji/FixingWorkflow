@@ -28,6 +28,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
     const { data: user } = await kindeAPI.get({
       endpoint: `user?id=${userId}&expand=organizations`,
     });
+    console.log("User API response:", JSON.stringify(user, null, 2));
     
     // Check if organizations exist
     if (user?.organizations && user.organizations.length > 0) {
@@ -44,6 +45,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
           const { data: rolesData } = await kindeAPI.get({
             endpoint: `roles`,
           });
+          console.log("Available roles response:", JSON.stringify(rolesData, null, 2));
           
           // Find the Test role
           const testRole = rolesData?.roles?.find((role: any) => role.key === "Test");
@@ -54,6 +56,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
             const { data: userRolesData } = await kindeAPI.get({
               endpoint: `organizations/${orgCode}/users/${userId}/roles`,
             });
+            console.log(`User roles in ${orgCode} response:`, JSON.stringify(userRolesData, null, 2));
             
             const hasRole = userRolesData?.roles?.some((role: any) => role.id === testRole.id);
             
@@ -63,6 +66,7 @@ async function getUserWithOrganizations(userId: string, event: onUserPostAuthent
                 endpoint: `organizations/${orgCode}/users/${userId}/roles`,
                 params: { "role_id": testRole.id },
               });
+              console.log(`Role assignment response for ${orgCode}:`, JSON.stringify(addRoleResponse, null, 2));
               
               // Check if this organization worked
               if (!addRoleResponse.data?.errors) {
