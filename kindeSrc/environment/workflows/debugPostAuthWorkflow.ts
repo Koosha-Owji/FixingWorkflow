@@ -50,72 +50,58 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
 
   const isNewKindeUser = event.context.auth.isNewUserRecordCreated;
 
-  // Step 1: Ensure user is assigned to organization
-  await ensureUserInOrganization(kindeAPI, userId, user, TEST_ORG_ID);
-
-  // Step 2: Assign test role within the organization
-  await assignTestRole(kindeAPI, userId, TEST_ORG_ID, TEST_ROLE_ID, isNewKindeUser);
+  // Step 1: Ensure user is assigned to organization with role
+  await ensureUserInOrganizationWithRole(kindeAPI, userId, user, TEST_ORG_ID, TEST_ROLE_ID, isNewKindeUser);
 }
 
-async function ensureUserInOrganization(
+async function ensureUserInOrganizationWithRole(
   kindeAPI: any,
   userId: string,
   user: any,
-  orgId: string
+  orgId: string,
+  testRoleId: string,
+  isNewUser: boolean
 ) {
-  console.log("Ensuring user is assigned to organization");
+  console.log("Ensuring user is assigned to organization with role");
 
   // Check if user is already in the organization
   const userInOrg = user.organizations?.some((org: any) => org.code === orgId);
   
   if (!userInOrg) {
-    console.log("Adding user to organization");
-    const addUserToOrgResponse = await kindeAPI.patch({
+    console.log("Adding user to organization with role");
+    
+    // Add user to organization with role in a single API call
+    const userPayload: any = { id: userId };
+    if (testRoleId) {
+      userPayload.roles = [testRoleId];
+    }
+    
+    const addUserToOrgResponse = await kindeAPI.post({
       endpoint: `organizations/${orgId}/users`,
       body: {
-        users: [{ id: userId }],
+        users: [userPayload],
       }
     });
-    console.log("Kinde API - Add User to Organization Response:", addUserToOrgResponse);
+    console.log("Kinde API - Add User to Organization with Role Response:", addUserToOrgResponse);
   } else {
-    console.log("User already in organization");
-  }
-}
-
-async function assignTestRole(
-  kindeAPI: any,
-  userId: string,
-  orgId: string,
-  testRoleId: string,
-  isNewUser: boolean
-) {
-  console.log("Assigning test role within organization");
-
-  if (!testRoleId) {
-    console.log("No test role ID provided");
-    return;
-  }
-
-  if (isNewUser) {
-    // For new users, assign the test role
-    console.log("New user - assigning test role");
-    await assignRole(kindeAPI, userId, orgId, testRoleId, "Test");
-  } else {
-    // For existing users, check current roles and ensure they have the test role
-    console.log("Existing user - checking and updating role");
+    console.log("User already in organization - checking role assignment");
     
-    const { data: userRolesData } = await kindeAPI.get({
-      endpoint: `organizations/${orgId}/users/${userId}/roles`,
-    });
-    const currentRoles = userRolesData?.roles || [];
-    console.log("Current User Roles:", currentRoles);
+    if (testRoleId) {
+      // User is in org, but we need to check if they have the role
+      const { data: userRolesData } = await kindeAPI.get({
+        endpoint: `organizations/${orgId}/users/${userId}/roles`,
+      });
+      const currentRoles = userRolesData?.roles || [];
+      console.log("Current User Roles:", currentRoles);
 
-    // Ensure user has the test role
-    const hasTestRole = currentRoles.some((role: any) => role.id === testRoleId);
-    if (!hasTestRole) {
-      await assignRole(kindeAPI, userId, orgId, testRoleId, "Test");
-    } else {
-      console.log("User already has Test role");
+      // Check if user has the test role
+      const hasTestRole = currentRoles.some((role: any) => role.id === testRoleId);
+      if (!hasTestRole) {
+        console.log("Adding missing test role to existing organization user");
+        await assignRole(kindeAPI, userId, orgId, testRoleId, "Test");
+      } else {
+        console.log("User already has the test role");
+      }
     }
   }
 }
