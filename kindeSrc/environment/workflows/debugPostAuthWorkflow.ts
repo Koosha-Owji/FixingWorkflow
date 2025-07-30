@@ -32,6 +32,7 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   const TEST_ORG_ID = getEnvironmentVariable("TEST_ORG_ID")?.value;
 
   console.log("Processing user authentication for testing");
+  console.log("Environment variables - TEST_ORG_ID:", TEST_ORG_ID, "TEST_ROLE_ID:", TEST_ROLE_ID);
 
   // Get Kinde API instance
   const kindeAPI = await createKindeAPI(event);
@@ -76,13 +77,21 @@ async function ensureUserInOrganizationWithRole(
       userPayload.roles = [testRoleId];
     }
     
-    const addUserToOrgResponse = await kindeAPI.post({
-      endpoint: `organizations/${orgId}/users`,
-      body: {
-        users: [userPayload],
-      }
-    });
-    console.log("Kinde API - Add User to Organization with Role Response:", addUserToOrgResponse);
+    console.log("Request payload:", JSON.stringify({ users: [userPayload] }, null, 2));
+    
+    try {
+      const addUserToOrgResponse = await kindeAPI.post({
+        endpoint: `organizations/${orgId}/users`,
+        body: {
+          users: [userPayload],
+        }
+      });
+      console.log("Kinde API - Add User to Organization with Role Response Status:", addUserToOrgResponse.status);
+      console.log("Kinde API - Add User to Organization with Role Response Data:", JSON.stringify(addUserToOrgResponse.data, null, 2));
+    } catch (error) {
+      console.error("Error adding user to organization:", error);
+      throw error;
+    }
   } else {
     console.log("User already in organization - checking role assignment");
     
@@ -115,10 +124,16 @@ async function assignRole(
 ) {
   console.log(`Assigning ${roleName} role to user`);
   
-  const addRoleResponse = await kindeAPI.post({
-    endpoint: `organizations/${orgId}/users/${userId}/roles`,
-    body: { role_id: roleId },
-  });
-  
-  console.log(`Kinde API - Add ${roleName} Role Response:`, addRoleResponse);
+  try {
+    const addRoleResponse = await kindeAPI.post({
+      endpoint: `organizations/${orgId}/users/${userId}/roles`,
+      body: { role_id: roleId },
+    });
+    
+    console.log(`Kinde API - Add ${roleName} Role Response Status:`, addRoleResponse.status);
+    console.log(`Kinde API - Add ${roleName} Role Response Data:`, JSON.stringify(addRoleResponse.data, null, 2));
+  } catch (error) {
+    console.error(`Error assigning ${roleName} role:`, error);
+    throw error;
+  }
 }
