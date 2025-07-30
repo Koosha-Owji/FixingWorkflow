@@ -82,7 +82,7 @@ async function ensureUserInOrganizationWithRole(
     try {
       const addUserToOrgResponse = await kindeAPI.post({
         endpoint: `organizations/${orgId}/users`,
-        body: {
+        params: {
           users: [userPayload],
         }
       });
@@ -124,18 +124,17 @@ async function assignRole(
 ) {
   console.log(`Assigning ${roleName} role to user`);
   
-  try {
-    // Note: Individual role assignment might still use role_key in the body
-    // This is different from the bulk organization user addition which uses role keys in the roles array
-    const addRoleResponse = await kindeAPI.post({
-      endpoint: `organizations/${orgId}/users/${userId}/roles`,
-      body: { role_key: roleKey },
-    });
-    
-    console.log(`Kinde API - Add ${roleName} Role Response Status:`, addRoleResponse.status);
-    console.log(`Kinde API - Add ${roleName} Role Response Data:`, JSON.stringify(addRoleResponse.data, null, 2));
-  } catch (error) {
-    console.error(`Error assigning ${roleName} role:`, error);
-    throw error;
-  }
+      try {
+      // Note: Individual role assignment uses params, not body
+      const addRoleResponse = await kindeAPI.post({
+        endpoint: `organizations/${orgId}/users/${userId}/roles`,
+        params: { role_key: roleKey },
+      });
+      
+      console.log(`Kinde API - Add ${roleName} Role Response Status:`, addRoleResponse.status);
+      console.log(`Kinde API - Add ${roleName} Role Response Data:`, JSON.stringify(addRoleResponse.data, null, 2));
+    } catch (error) {
+      console.error(`Error assigning ${roleName} role:`, error);
+      throw error;
+    }
 }
