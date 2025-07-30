@@ -28,11 +28,11 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   const userId = event.context.user.id;
 
   // Get environment variables for testing
-  const TEST_ROLE_ID = getEnvironmentVariable("TEST_ROLE_ID")?.value;
+  const TEST_ROLE_KEY = getEnvironmentVariable("TEST_ROLE_KEY")?.value;
   const TEST_ORG_ID = getEnvironmentVariable("TEST_ORG_ID")?.value;
 
   console.log("Processing user authentication for testing");
-  console.log("Environment variables - TEST_ORG_ID:", TEST_ORG_ID, "TEST_ROLE_ID:", TEST_ROLE_ID);
+  console.log("Environment variables - TEST_ORG_ID:", TEST_ORG_ID, "TEST_ROLE_KEY:", TEST_ROLE_KEY);
 
   // Get Kinde API instance
   const kindeAPI = await createKindeAPI(event);
@@ -52,7 +52,7 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   const isNewKindeUser = event.context.auth.isNewUserRecordCreated;
 
   // Step 1: Ensure user is assigned to organization with role
-  await ensureUserInOrganizationWithRole(kindeAPI, userId, user, TEST_ORG_ID, TEST_ROLE_ID, isNewKindeUser);
+  await ensureUserInOrganizationWithRole(kindeAPI, userId, user, TEST_ORG_ID, TEST_ROLE_KEY, isNewKindeUser);
 }
 
 async function ensureUserInOrganizationWithRole(
@@ -60,7 +60,7 @@ async function ensureUserInOrganizationWithRole(
   userId: string,
   user: any,
   orgId: string,
-  testRoleId: string,
+  testRoleKey: string,
   isNewUser: boolean
 ) {
   console.log("Ensuring user is assigned to organization with role");
@@ -73,8 +73,8 @@ async function ensureUserInOrganizationWithRole(
     
     // Add user to organization with role in a single API call
     const userPayload: any = { id: userId };
-    if (testRoleId) {
-      userPayload.roles = [testRoleId];
+    if (testRoleKey) {
+      userPayload.roles = [testRoleKey];
     }
     
     console.log("Request payload:", JSON.stringify({ users: [userPayload] }, null, 2));
@@ -95,7 +95,7 @@ async function ensureUserInOrganizationWithRole(
   } else {
     console.log("User already in organization - checking role assignment");
     
-    if (testRoleId) {
+    if (testRoleKey) {
       // User is in org, but we need to check if they have the role
       const { data: userRolesData } = await kindeAPI.get({
         endpoint: `organizations/${orgId}/users/${userId}/roles`,
@@ -103,11 +103,11 @@ async function ensureUserInOrganizationWithRole(
       const currentRoles = userRolesData?.roles || [];
       console.log("Current User Roles:", currentRoles);
 
-      // Check if user has the test role
-      const hasTestRole = currentRoles.some((role: any) => role.id === testRoleId);
+      // Check if user has the test role (by key, not ID)
+      const hasTestRole = currentRoles.some((role: any) => role.key === testRoleKey);
       if (!hasTestRole) {
         console.log("Adding missing test role to existing organization user");
-        await assignRole(kindeAPI, userId, orgId, testRoleId, "Test");
+        await assignRole(kindeAPI, userId, orgId, testRoleKey, "Test");
       } else {
         console.log("User already has the test role");
       }
@@ -119,15 +119,17 @@ async function assignRole(
   kindeAPI: any,
   userId: string,
   orgId: string,
-  roleId: string,
+  roleKey: string,
   roleName: string
 ) {
   console.log(`Assigning ${roleName} role to user`);
   
   try {
+    // Note: Individual role assignment might still use role_key in the body
+    // This is different from the bulk organization user addition which uses role keys in the roles array
     const addRoleResponse = await kindeAPI.post({
       endpoint: `organizations/${orgId}/users/${userId}/roles`,
-      body: { role_id: roleId },
+      body: { role_key: roleKey },
     });
     
     console.log(`Kinde API - Add ${roleName} Role Response Status:`, addRoleResponse.status);
