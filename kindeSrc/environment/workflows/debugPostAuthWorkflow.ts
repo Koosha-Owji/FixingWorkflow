@@ -22,36 +22,16 @@ export const workflowSettings: WorkflowSettings = {
   },
 };
 
-interface AzureADClaims {
-  groups?: string[];
-  tid?: string;
-}
-
 export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   console.log("onPostAuthentication", event);
 
-  // Extract Azure AD groups and tenancyId from the event
-  const claims = (event.context.auth as any).provider?.data?.idToken?.claims as AzureADClaims;
-  const adGroups = claims?.groups || [];
-  const tenancyId = claims?.tid;
   const userId = event.context.user.id;
 
-  // Get environment variables
-  const EXTRAORDINARY_BASE_URL = getEnvironmentVariable("EXTRAORDINARY_BASE_URL")?.value;
-  const EXTRAORDINARY_API_KEY = getEnvironmentVariable("EXTRAORDINARY_API_KEY")?.value;
-  const AIRNZ_TENANCY_ID = getEnvironmentVariable("AIRNZ_TENANCY_ID")?.value;
-  const AIRNZ_EMPLOYER_GROUP_ID = getEnvironmentVariable("AIRNZ_EMPLOYER_GROUP_ID")?.value;
-  const AIRNZ_EMPLOYEE_GROUP_ID = getEnvironmentVariable("AIRNZ_EMPLOYEE_GROUP_ID")?.value;
-  const EMPLOYEE_ROLE_ID = getEnvironmentVariable("EMPLOYEE_ROLE_ID")?.value;
-  const EMPLOYER_ROLE_ID = getEnvironmentVariable("EMPLOYER_ROLE_ID")?.value;
-  const AIRNZ_KINE_ORG_ID = getEnvironmentVariable("AIRNZ_KINE_ORG_ID")?.value;
+  // Get environment variables for testing
+  const TEST_ROLE_ID = getEnvironmentVariable("TEST_ROLE_ID")?.value;
+  const TEST_ORG_ID = getEnvironmentVariable("TEST_ORG_ID")?.value;
 
-  // Check if tenancyId matches AIRNZ_TENANCY_ID
-  if (tenancyId !== AIRNZ_TENANCY_ID) {
-    return;
-  }
-
-  console.log("Processing AirNZ user authentication");
+  console.log("Processing user authentication for testing");
 
   // Get Kinde API instance
   const kindeAPI = await createKindeAPI(event);
@@ -64,28 +44,24 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
 
   // Get organization details
   const { data: organization } = await kindeAPI.get({
-    endpoint: `organization?code=${AIRNZ_KINE_ORG_ID}`,
+    endpoint: `organization?code=${TEST_ORG_ID}`,
   });
   console.log("Organization Response:", organization);
 
   const isNewKindeUser = event.context.auth.isNewUserRecordCreated;
 
   // Step 1: Ensure user is assigned to organization
-  await ensureUserInOrganization(kindeAPI, userId, user, organization, AIRNZ_KINE_ORG_ID, isNewKindeUser, EXTRAORDINARY_BASE_URL, EXTRAORDINARY_API_KEY);
+  await ensureUserInOrganization(kindeAPI, userId, user, TEST_ORG_ID);
 
-  // Step 2: Manage role assignments within the organization
-  await manageUserRoles(kindeAPI, userId, adGroups, AIRNZ_KINE_ORG_ID, AIRNZ_EMPLOYER_GROUP_ID, AIRNZ_EMPLOYEE_GROUP_ID, EMPLOYER_ROLE_ID, EMPLOYEE_ROLE_ID, isNewKindeUser);
+  // Step 2: Assign test role within the organization
+  await assignTestRole(kindeAPI, userId, TEST_ORG_ID, TEST_ROLE_ID, isNewKindeUser);
 }
 
 async function ensureUserInOrganization(
   kindeAPI: any,
   userId: string,
   user: any,
-  organization: any,
-  orgId: string,
-  isNewUser: boolean,
-  extraordinaryBaseUrl: string,
-  extraordinaryApiKey: string
+  orgId: string
 ) {
   console.log("Ensuring user is assigned to organization");
 
@@ -101,135 +77,62 @@ async function ensureUserInOrganization(
       }
     });
     console.log("Kinde API - Add User to Organization Response:", addUserToOrgResponse);
-  }
-
-  // If this is a new user, create them in Extraordinary system
-  if (isNewUser) {
-    console.log("Provisioning new user in Extraordinary system");
-    
-    const userData = {
-      firstName: user.first_name,
-      lastName: user.last_name,
-      email: user.preferred_email,
-      employerId: organization.external_id,
-      kindeUserId: userId,
-    };
-
-    const response = await fetch(
-      `${extraordinaryBaseUrl}/api/users-provisioning`,
-      {
-        method: "POST",
-        headers: {
-          "X-KINDE-KEY": extraordinaryApiKey,
-          "Content-Type": "application/json",
-        },
-        body: userData,
-      }
-    );
-    const employee = response.data;
-
-    console.log('Extraordinary API Response:', {
-      status: response.status,
-      data: response.data
-    });
-
-    // Add employeeId property to user
-    const propertyResponse = await kindeAPI.put({
-      endpoint: `users/${userId}/properties/employee_id?value=${employee.id}`
-    });
-    console.log("Kinde API - Update Property Response:", propertyResponse);
+  } else {
+    console.log("User already in organization");
   }
 }
 
-async function manageUserRoles(
+async function assignTestRole(
   kindeAPI: any,
   userId: string,
-  adGroups: string[],
   orgId: string,
-  employerGroupId: string,
-  employeeGroupId: string,
-  employerRoleId: string,
-  employeeRoleId: string,
+  testRoleId: string,
   isNewUser: boolean
 ) {
-  console.log("Managing user roles within organization");
+  console.log("Assigning test role within organization");
 
-  // Determine user's group memberships
-  const isEmployer = adGroups.includes(employerGroupId);
-  const isEmployee = adGroups.includes(employeeGroupId);
-
-  console.log("User role assignments:", { isEmployer, isEmployee });
+  if (!testRoleId) {
+    console.log("No test role ID provided");
+    return;
+  }
 
   if (isNewUser) {
-    // For new users, simply assign roles based on AD groups
-    await assignRoleIfNeeded(kindeAPI, userId, orgId, employerRoleId, isEmployer, "Employer");
-    await assignRoleIfNeeded(kindeAPI, userId, orgId, employeeRoleId, isEmployee, "Employee");
+    // For new users, assign the test role
+    console.log("New user - assigning test role");
+    await assignRole(kindeAPI, userId, orgId, testRoleId, "Test");
   } else {
-    // For existing users, get current roles and sync with AD groups
+    // For existing users, check current roles and ensure they have the test role
+    console.log("Existing user - checking and updating role");
+    
     const { data: userRolesData } = await kindeAPI.get({
       endpoint: `organizations/${orgId}/users/${userId}/roles`,
     });
-    const userRoles = userRolesData?.roles || [];
-    console.log("Current User Roles:", userRoles);
+    const currentRoles = userRolesData?.roles || [];
+    console.log("Current User Roles:", currentRoles);
 
-    // Manage Employer role
-    await syncUserRole(kindeAPI, userId, orgId, employerRoleId, isEmployer, userRoles, "Employer");
-    
-    // Manage Employee role
-    await syncUserRole(kindeAPI, userId, orgId, employeeRoleId, isEmployee, userRoles, "Employee");
+    // Ensure user has the test role
+    const hasTestRole = currentRoles.some((role: any) => role.id === testRoleId);
+    if (!hasTestRole) {
+      await assignRole(kindeAPI, userId, orgId, testRoleId, "Test");
+    } else {
+      console.log("User already has Test role");
+    }
   }
 }
 
-async function assignRoleIfNeeded(
+async function assignRole(
   kindeAPI: any,
   userId: string,
   orgId: string,
   roleId: string,
-  shouldAssign: boolean,
   roleName: string
 ) {
-  if (shouldAssign) {
-    console.log(`Assigning ${roleName} role to user`);
-    const addRoleResponse = await kindeAPI.post({
-      endpoint: `organizations/${orgId}/users/${userId}/roles`,
-      body: { role_id: roleId },
-    });
-    console.log(`Kinde API - Add ${roleName} Role Response:`, addRoleResponse);
-  }
+  console.log(`Assigning ${roleName} role to user`);
+  
+  const addRoleResponse = await kindeAPI.post({
+    endpoint: `organizations/${orgId}/users/${userId}/roles`,
+    body: { role_id: roleId },
+  });
+  
+  console.log(`Kinde API - Add ${roleName} Role Response:`, addRoleResponse);
 }
-
-async function syncUserRole(
-  kindeAPI: any,
-  userId: string,
-  orgId: string,
-  roleId: string,
-  shouldHaveRole: boolean,
-  currentRoles: any[],
-  roleName: string
-) {
-  const userHasRole = currentRoles.some((role: any) => role.id === roleId);
-
-  if (shouldHaveRole && !userHasRole) {
-    // Add role
-    console.log(`Adding ${roleName} role to user`);
-    const addRoleResponse = await kindeAPI.post({
-      endpoint: `organizations/${orgId}/users/${userId}/roles`,
-      body: { role_id: roleId },
-    });
-    console.log(`Kinde API - Add ${roleName} Role Response:`, addRoleResponse);
-  } else if (!shouldHaveRole && userHasRole) {
-    // Remove role
-    console.log(`Removing ${roleName} role from user`);
-    const removeRoleResponse = await kindeAPI.delete({
-      endpoint: `organizations/${orgId}/users/${userId}/roles/${roleId}`,
-    });
-    console.log(`Kinde API - Remove ${roleName} Role Response:`, removeRoleResponse);
-  }
-}
-
-
-
-
-
-
-
