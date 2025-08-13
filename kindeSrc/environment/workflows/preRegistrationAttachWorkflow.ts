@@ -21,6 +21,7 @@ export default async function handlePreRegistration(event: any) {
   // Example payload location for org code per docs
   const authParams = event?.request?.authUrlParams ?? {};
   console.log("[pre-registration] authUrlParams:", JSON.stringify(authParams));
+  console.log("[pre-registration] request:", JSON.stringify(event?.request || {}));
   const orgCode = authParams.orgCode || authParams.org_code || null;
 
   // 1) Check consent via redirectUri query param (consent=1|true)
