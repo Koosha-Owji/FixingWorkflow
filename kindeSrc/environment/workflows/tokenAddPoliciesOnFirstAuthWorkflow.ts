@@ -9,7 +9,7 @@ export const workflowSettings: WorkflowSettings = {
   name: "Add policy URLs to ID token on first auth",
   failurePolicy: { action: "stop" },
   // Token customization trigger
-  trigger: "user:token" as any,
+  trigger: "user:tokens_generation",
   bindings: {
     "kinde.env": {},
     "kinde.idToken": {},

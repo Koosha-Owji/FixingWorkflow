@@ -11,7 +11,7 @@ export const workflowSettings: WorkflowSettings = {
     action: "stop",
   },
   // The SDK enum name may vary; use string literal to align with user:pre_registration
-  trigger: "user:pre_registration" as any,
+  trigger: "user:pre_registration",
   bindings: {
     "kinde.env": {},
   },
