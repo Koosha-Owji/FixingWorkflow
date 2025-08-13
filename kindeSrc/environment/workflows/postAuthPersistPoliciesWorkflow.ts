@@ -13,6 +13,8 @@ export const workflowSettings: WorkflowSettings = {
   trigger: WorkflowTrigger.PostAuthentication,
   bindings: {
     "kinde.env": {},
+    "kinde.fetch": {},
+    url: {},
   },
 };
 
@@ -31,32 +33,23 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
   const api = await createKindeAPI(event);
 
   // Read before
-  const beforeResp = await api.get({ endpoint: `user?id=${userId}` });
+  const beforeResp = await api.get({ endpoint: `user`, params: { id: userId, expand: "none" } });
   console.log("[post-auth] existing user attrs:", JSON.stringify(beforeResp?.data?.custom_attributes || {}));
 
-  // Persist via update
-  // Some environments accept PATCH /user; if not available, fallback to PUT with minimal payload
+  // Persist via update using JSON body only (avoid URLSearchParams)
   try {
-    const updateResp = await api.patch?.({
+    const putResp = await api.put({
       endpoint: `user`,
-      params: { id: userId, custom_attributes: desired },
+      json: { id: userId, custom_attributes: desired },
     });
-    if (updateResp) {
-      console.log("[post-auth] PATCH user custom_attributes status:", updateResp.status);
-    } else {
-      const putResp = await api.put({
-        endpoint: `user`,
-        params: { id: userId, custom_attributes: desired },
-      });
-      console.log("[post-auth] PUT user custom_attributes status:", putResp.status);
-    }
+    console.log("[post-auth] PUT user custom_attributes status:", putResp.status);
   } catch (e) {
     console.log("[post-auth] Error updating user custom_attributes:", e);
     throw e;
   }
 
   // Read after
-  const afterResp = await api.get({ endpoint: `user?id=${userId}` });
+  const afterResp = await api.get({ endpoint: `user`, params: { id: userId, expand: "none" } });
   console.log("[post-auth] updated user attrs:", JSON.stringify(afterResp?.data?.custom_attributes || {}));
 }
 
