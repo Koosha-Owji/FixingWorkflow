@@ -30,6 +30,7 @@ export default async function handleUserToken(event: any) {
   const idToken = idTokenCustomClaims<{ terms_url: string; privacy_url: string }>();
   idToken.terms_url = TERMS_URL;
   idToken.privacy_url = PRIVACY_URL;
+  console.log("[token] added claims terms_url/privacy_url");
 
   return event;
 }
