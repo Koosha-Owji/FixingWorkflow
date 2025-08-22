@@ -14,8 +14,6 @@ type OnNewPasswordProvidedEvent = {
   };
 };
 
-declare function invalidateFormField(fieldId: string, message: string): void;
-
 // The setting for this workflow
 export const workflowSettings: WorkflowSettings = {
   id: "onNewPasswordProvided",
