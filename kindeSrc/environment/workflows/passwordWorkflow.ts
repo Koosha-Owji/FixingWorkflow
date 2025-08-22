@@ -43,7 +43,7 @@ export default async function Workflow(event: OnNewPasswordProvidedEvent) {
 
   if (!isValidPassword) {
     // Custom form validation with comprehensive error message
-    invalidateFormField(
+    (globalThis as any).invalidateFormField?.(
       "p_first_password",
       `Password must be at least 12 characters long and
        include uppercase and lowercase letters, a number and a symbol ${password}`
