@@ -6,23 +6,18 @@ type WorkflowSettings = {
   bindings?: Record<string, any>;
 };
 
-// Helper to invalidate password field in Kinde runtime regardless of injection style
-function invalidatePasswordField(message: string) {
+// Helper to invalidate a specific field in Kinde runtime regardless of injection style
+function invalidateField(fieldId: "p_first_password" | "p_second_password", message: string) {
   const maybeKinde = (globalThis as any).kinde;
   const invalidateViaWidget = maybeKinde?.widget?.invalidateFormField?.bind(
     maybeKinde.widget
   );
   const invalidateGlobal = (globalThis as any).invalidateFormField;
 
-  // Try common field ids used by Kinde's set password form
-  const fieldIds = ["password", "p_first_password"]; // cover both
-
-  for (const fieldId of fieldIds) {
-    if (typeof invalidateViaWidget === "function") {
-      invalidateViaWidget(fieldId, message);
-    } else if (typeof invalidateGlobal === "function") {
-      invalidateGlobal(fieldId, message);
-    }
+  if (typeof invalidateViaWidget === "function") {
+    invalidateViaWidget(fieldId, message);
+  } else if (typeof invalidateGlobal === "function") {
+    invalidateGlobal(fieldId, message);
   }
 }
 
@@ -30,6 +25,7 @@ type OnNewPasswordProvidedEvent = {
   context: {
     auth: {
       firstPassword: string;
+      secondPassword?: string;
     };
   };
 };
@@ -51,6 +47,16 @@ export const workflowSettings: WorkflowSettings = {
 // The workflow code to be executed when the event is triggered
 export default async function Workflow(event: OnNewPasswordProvidedEvent) {
   const password = event.context.auth.firstPassword;
+  const confirmPassword = event.context.auth.secondPassword;
+  
+  // First: ensure passwords match if a confirmation is provided
+  if (typeof confirmPassword === "string" && confirmPassword !== password) {
+    invalidateField(
+      "p_second_password",
+      "Passwords must match."
+    );
+    return;
+  }
   
   // Password validation rules
   const isMinLength = password.length >= 12;
@@ -63,8 +69,9 @@ export default async function Workflow(event: OnNewPasswordProvidedEvent) {
 
   if (!isValidPassword) {
     // Custom form validation with comprehensive error message
-    invalidatePasswordField(
-      `Password must be at least 12 characters long and include uppercase and lowercase letters, a number and a symbol.`
+    invalidateField(
+      "p_first_password",
+      "Password must be at least 12 characters long and include uppercase and lowercase letters, a number and a symbol."
     );
     return;
   }
