@@ -6,6 +6,26 @@ type WorkflowSettings = {
   bindings?: Record<string, any>;
 };
 
+// Helper to invalidate password field in Kinde runtime regardless of injection style
+function invalidatePasswordField(message: string) {
+  const maybeKinde = (globalThis as any).kinde;
+  const invalidateViaWidget = maybeKinde?.widget?.invalidateFormField?.bind(
+    maybeKinde.widget
+  );
+  const invalidateGlobal = (globalThis as any).invalidateFormField;
+
+  // Try common field ids used by Kinde's set password form
+  const fieldIds = ["password", "p_first_password"]; // cover both
+
+  for (const fieldId of fieldIds) {
+    if (typeof invalidateViaWidget === "function") {
+      invalidateViaWidget(fieldId, message);
+    } else if (typeof invalidateGlobal === "function") {
+      invalidateGlobal(fieldId, message);
+    }
+  }
+}
+
 type OnNewPasswordProvidedEvent = {
   context: {
     auth: {
@@ -43,11 +63,10 @@ export default async function Workflow(event: OnNewPasswordProvidedEvent) {
 
   if (!isValidPassword) {
     // Custom form validation with comprehensive error message
-    (globalThis as any).invalidateFormField?.(
-      "p_first_password",
-      `Password must be at least 12 characters long and
-       include uppercase and lowercase letters, a number and a symbol ${password}`
+    invalidatePasswordField(
+      `Password must be at least 12 characters long and include uppercase and lowercase letters, a number and a symbol.`
     );
+    return;
   }
 }
 
