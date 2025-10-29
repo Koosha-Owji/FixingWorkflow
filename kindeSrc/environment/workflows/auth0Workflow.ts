@@ -26,6 +26,7 @@ export const workflowSettings: WorkflowSettings = {
 
 // Helper function to create Kinde API client with M2M authentication
 async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
+  const KINDE_DOMAIN = "kooshaowji.kinde.com";
   const clientId = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_ID")?.value;
   const clientSecret = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_SECRET")?.value;
 
@@ -33,12 +34,12 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
     throw new Error("KINDE_WF_M2M_CLIENT_ID or KINDE_WF_M2M_CLIENT_SECRET not set");
   }
 
-  const tokenResponse = await fetch(`https://${event.context.domain}/oauth2/token`, {
+  const tokenResponse = await fetch(`https://${KINDE_DOMAIN}/oauth2/token`, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
     },
-    body: `grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}&audience=https://${event.context.domain}/api`,
+    body: `grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}&audience=https://${KINDE_DOMAIN}/api`,
   });
 
   const tokenData = await tokenResponse.json();
@@ -46,7 +47,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
 
   return {
     post: async ({ endpoint, params }: { endpoint: string; params: any }) => {
-      const response = await fetch(`https://${event.context.domain}/api/v1/${endpoint}`, {
+      const response = await fetch(`https://${KINDE_DOMAIN}/api/v1/${endpoint}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -57,7 +58,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
       return { data: await response.json() };
     },
     put: async ({ endpoint, params }: { endpoint: string; params: any }) => {
-      const response = await fetch(`https://${event.context.domain}/api/v1/${endpoint}`, {
+      const response = await fetch(`https://${KINDE_DOMAIN}/api/v1/${endpoint}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${accessToken}`,
