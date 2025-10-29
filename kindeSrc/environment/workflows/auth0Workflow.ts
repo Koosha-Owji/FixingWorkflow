@@ -110,7 +110,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
 
     console.log("Create user response:", JSON.stringify(res));
 
-    const userId = res.id;
+    const userId = res.data.id;
     console.log("User ID:", userId);
 
     console.log("Setting password...");
