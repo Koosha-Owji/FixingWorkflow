@@ -40,7 +40,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
     // Create user in Kinde with minimal profile
     const { data: created } = await kindeAPI.post({
       endpoint: "user",
-      params: JSON.stringify({
+      params: {
         profile: {
           given_name: "Test",
           family_name: "User",
@@ -53,7 +53,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
             },
           },
         ],
-      }),
+      },
     });
 
     // Set the hashed password
@@ -66,8 +66,13 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
 
     console.log(`User created successfully: ${providedEmail}`);
   } catch (error) {
-    console.error("Migration workflow error", error);
+    console.error("Migration workflow error", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      error: error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     // Don't invalidate the form field to see the actual error
+    throw error; // Re-throw to see the full error in Kinde logs
   }
 }
 
