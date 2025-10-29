@@ -4,6 +4,7 @@ import {
   WorkflowTrigger,
   invalidateFormField,
   fetch,
+  getEnvironmentVariable,
 } from "@kinde/infrastructure";
 
 // TEST WORKFLOW: This workflow tests the serverless migration pattern.
@@ -19,8 +20,55 @@ export const workflowSettings: WorkflowSettings = {
   bindings: {
     "kinde.widget": {},
     "kinde.fetch": {},
+    "kinde.env": {},
   },
 };
+
+// Helper function to create Kinde API client with M2M authentication
+async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
+  const clientId = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_ID")?.value;
+  const clientSecret = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_SECRET")?.value;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("KINDE_WF_M2M_CLIENT_ID or KINDE_WF_M2M_CLIENT_SECRET not set");
+  }
+
+  const tokenResponse = await fetch(`https://${event.context.domain}/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: `grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}&audience=https://${event.context.domain}/api`,
+  });
+
+  const tokenData = await tokenResponse.json();
+  const accessToken = tokenData.access_token;
+
+  return {
+    post: async ({ endpoint, params }: { endpoint: string; params: any }) => {
+      const response = await fetch(`https://${event.context.domain}/api/v1/${endpoint}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(params),
+      });
+      return { data: await response.json() };
+    },
+    put: async ({ endpoint, params }: { endpoint: string; params: any }) => {
+      const response = await fetch(`https://${event.context.domain}/api/v1/${endpoint}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(params),
+      });
+      return { data: await response.json() };
+    },
+  };
+}
 
 export default async function Workflow(event: onExistingPasswordProvidedEvent) {
   const { hashedPassword, providedEmail, hasUserRecordInKinde } =
@@ -35,7 +83,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
     // For testing: Accept any credentials and create the user immediately
     // In production, you would validate against Auth0 here first
 
-    const kindeAPI = fetch;
+    const kindeAPI = await createKindeAPI(event);
 
     // Create user in Kinde with minimal profile
     const { data: created } = await kindeAPI.post({
