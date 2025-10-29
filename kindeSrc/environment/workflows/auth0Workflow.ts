@@ -21,12 +21,16 @@ export const workflowSettings: WorkflowSettings = {
 };
 
 async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
-  const KINDE_DOMAIN = "kooshaowji.kinde.com";
+  const issuerUrl = getEnvironmentVariable("KINDE_WF_ISSUER_URL")?.value;
   const clientId = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_ID")?.value;
   const clientSecret = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_SECRET")?.value;
 
-  const tokenUrl = `https://${KINDE_DOMAIN}/oauth2/token`;
-  const tokenBody = `grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}&audience=https://${KINDE_DOMAIN}/api`;
+  console.log("Issuer URL:", issuerUrl ? "Set" : "Not set");
+  console.log("Client ID:", clientId ? "Set" : "Not set");
+  console.log("Client Secret:", clientSecret ? "Set" : "Not set");
+
+  const tokenUrl = `${issuerUrl}/oauth2/token`;
+  const tokenBody = `grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}&audience=${issuerUrl}/api`;
 
   const tokenResponse = await fetch(tokenUrl, {
     method: "POST",
@@ -37,11 +41,14 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
     responseFormat: "json",
   });
 
+  console.log("Token response:", JSON.stringify(tokenResponse));
+
   const accessToken = tokenResponse.access_token;
+  console.log("Access token:", accessToken ? "Retrieved" : "NOT FOUND");
 
   return {
     post: async ({ endpoint, params }: { endpoint: string; params: any }) => {
-      const response = await fetch(`https://${KINDE_DOMAIN}/api/v1/${endpoint}`, {
+      const response = await fetch(`${issuerUrl}/api/v1/${endpoint}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -53,7 +60,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
       return { data: response };
     },
     put: async ({ endpoint, params }: { endpoint: string; params: any }) => {
-      const response = await fetch(`https://${KINDE_DOMAIN}/api/v1/${endpoint}`, {
+      const response = await fetch(`${issuerUrl}/api/v1/${endpoint}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${accessToken}`,
