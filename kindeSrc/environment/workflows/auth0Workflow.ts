@@ -81,6 +81,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
   try {
     const kindeAPI = await createKindeAPI(event);
 
+    console.log("Creating user...");
     const { data: res } = await kindeAPI.post({
       endpoint: `user`,
       params: JSON.stringify({
@@ -100,8 +101,12 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
       }),
     });
 
-    const userId = res.id;
+    console.log("Create user response:", JSON.stringify(res));
 
+    const userId = res.id;
+    console.log("User ID:", userId);
+
+    console.log("Setting password...");
     const { data: pwdRes } = await kindeAPI.put({
       endpoint: `users/${userId}/password`,
       params: {
@@ -109,8 +114,10 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
       },
     });
     
-    console.log(pwdRes.message);
+    console.log("Password response:", JSON.stringify(pwdRes));
+    console.log(pwdRes.message || "User created successfully");
   } catch (error) {
     console.error("error", error);
+    throw error;
   }
 }
