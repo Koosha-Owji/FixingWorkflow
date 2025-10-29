@@ -25,10 +25,6 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
   const clientId = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_ID")?.value;
   const clientSecret = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_SECRET")?.value;
 
-  console.log("Issuer URL:", issuerUrl ? "Set" : "Not set");
-  console.log("Client ID:", clientId ? "Set" : "Not set");
-  console.log("Client Secret:", clientSecret ? "Set" : "Not set");
-
   const tokenUrl = `${issuerUrl}/oauth2/token`;
   const tokenBody = `grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}&audience=${issuerUrl}/api`;
 
@@ -41,10 +37,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
     responseFormat: "json",
   });
 
-  console.log("Token response:", JSON.stringify(tokenResponse));
-
   const accessToken = tokenResponse.data.access_token;
-  console.log("Access token:", accessToken ? "Retrieved" : "NOT FOUND");
 
   return {
     post: async ({ endpoint, params }: { endpoint: string; params: any }) => {
@@ -79,16 +72,13 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
     event.context.auth;
 
   if (hasUserRecordInKinde) {
-    console.log("User exists in Kinde");
     return;
   }
-  
-  console.log("User does not exist in Kinde");
   
   try {
     const kindeAPI = await createKindeAPI(event);
 
-    console.log("Creating user...");
+    // Create the user in Kinde
     const { data: res } = await kindeAPI.post({
       endpoint: `user`,
       params: JSON.stringify({
@@ -108,23 +98,20 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
       }),
     });
 
-    console.log("Create user response:", JSON.stringify(res));
-
     const userId = res.data.id;
-    console.log("User ID:", userId);
 
-    console.log("Setting password...");
-    const { data: pwdRes } = await kindeAPI.put({
+    // Set the password for the user in Kinde
+    await kindeAPI.put({
       endpoint: `users/${userId}/password`,
       params: {
         hashed_password: hashedPassword,
       },
     });
     
-    console.log("Password response:", JSON.stringify(pwdRes));
-    console.log(pwdRes.message || "User created successfully");
+    console.log(`User migrated successfully: ${providedEmail}`);
   } catch (error) {
-    console.error("error", error);
+    console.error("Migration error", error);
+    invalidateFormField("p_password", "Unable to migrate user. Please try again.");
     throw error;
   }
 }
