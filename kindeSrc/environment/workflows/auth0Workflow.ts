@@ -43,7 +43,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
 
   console.log("Token response:", JSON.stringify(tokenResponse));
 
-  const accessToken = tokenResponse.access_token;
+  const accessToken = tokenResponse.data.access_token;
   console.log("Access token:", accessToken ? "Retrieved" : "NOT FOUND");
 
   return {
