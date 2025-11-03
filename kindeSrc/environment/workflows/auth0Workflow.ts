@@ -158,7 +158,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
         hashed_password: hashedPassword,
       },
     });
-    console.log("Password set successfully:", pwdRes.message);
+    console.log("Password set successfully:", pwdRes);
     console.log("User migration completed successfully");
   } catch (error) {
     console.error("Error during user migration workflow:", error);
