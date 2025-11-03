@@ -63,10 +63,14 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
     responseFormat: "json",
   });
 
+  console.log("Token API Response:", JSON.stringify(tokenResponse, null, 2));
+
   const accessToken = tokenResponse.data.access_token;
+  console.log("Access token obtained successfully");
 
   return {
     post: async ({ endpoint, params }: { endpoint: string; params: any }) => {
+      console.log(`Making POST request to: ${issuerUrl}/api/v1/${endpoint}`);
       const response = await fetch(`${issuerUrl}/api/v1/${endpoint}`, {
         method: "POST",
         headers: {
@@ -76,9 +80,11 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
         body: params,
         responseFormat: "json",
       });
+      console.log(`POST ${endpoint} response:`, JSON.stringify(response, null, 2));
       return { data: response };
     },
     put: async ({ endpoint, params }: { endpoint: string; params: any }) => {
+      console.log(`Making PUT request to: ${issuerUrl}/api/v1/${endpoint}`);
       const response = await fetch(`${issuerUrl}/api/v1/${endpoint}`, {
         method: "PUT",
         headers: {
@@ -88,6 +94,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
         body: JSON.stringify(params),
         responseFormat: "json",
       });
+      console.log(`PUT ${endpoint} response:`, JSON.stringify(response, null, 2));
       return { data: response };
     },
   };
@@ -114,10 +121,12 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
 
     // Password is verified in the external system
     // You can create the user in Kinde and set the password
+    console.log("Creating Kinde API instance...");
     const kindeAPI = await createKindeAPI(event);
 
     // Create the user in Kinde
     // You can use the userData from the external system to populate the Kinde user
+    console.log("Creating user in Kinde with email:", providedEmail);
     const { data: res } = await kindeAPI.post({
       endpoint: `user`,
       params: JSON.stringify({
@@ -138,17 +147,22 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
     });
 
     const userId = res.id;
+    console.log("User created successfully with ID:", userId);
 
     // Set the password for the user in Kinde
     // You can use the hashed password provided by Kinde
+    console.log("Setting password for user ID:", userId);
     const { data: pwdRes } = await kindeAPI.put({
       endpoint: `users/${userId}/password`,
       params: {
         hashed_password: hashedPassword,
       },
     });
-    console.log(pwdRes.message);
+    console.log("Password set successfully:", pwdRes.message);
+    console.log("User migration completed successfully");
   } catch (error) {
-    console.error("error", error);
+    console.error("Error during user migration workflow:", error);
+    console.error("Error details:", JSON.stringify(error, null, 2));
+    throw error;
   }
 }
