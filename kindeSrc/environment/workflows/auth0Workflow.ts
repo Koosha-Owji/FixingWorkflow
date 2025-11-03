@@ -128,9 +128,9 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
         identities: [
           {
             type: "email",
+            is_verified: true,
             details: {
               email: providedEmail,
-              email_verified: true
             },
           },
         ],
