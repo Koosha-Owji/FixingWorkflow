@@ -146,7 +146,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
       }),
     });
 
-    const userId = res.id;
+    const userId = res.data.id;
     console.log("User created successfully with ID:", userId);
 
     // Set the password for the user in Kinde
