@@ -20,8 +20,11 @@ import {
  */
 
 export const workflowSettings: WorkflowSettings = {
-  id: "onUserTokenGenerated",
-  trigger: WorkflowTrigger.UserTokensGeneration,
+  id: "onUserTokenGeneration",
+  trigger: WorkflowTrigger.UserTokenGeneration,
+  failurePolicy: {
+    action: "stop",
+  },
   bindings: {
     "kinde.accessToken": {}, // Required for modifying access tokens
     "kinde.idToken": {},     // Required for modifying ID tokens
