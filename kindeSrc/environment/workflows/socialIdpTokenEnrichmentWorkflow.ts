@@ -60,6 +60,7 @@ export default async function Workflow(event: onUserTokenGeneratedEvent) {
   console.log("Auth origin:", event.context.auth.origin);
   console.log("Connection ID:", event.context.auth.connectionId);
   console.log("User ID:", event.context.user.id);
+  console.log("Is existing session?:", event.context.auth.isExistingSession);
   
   // Detailed provider debugging
   console.log("Provider exists?:", !!provider);
@@ -67,10 +68,21 @@ export default async function Workflow(event: onUserTokenGeneratedEvent) {
   console.log("Provider value:", provider);
   console.log("Provider JSON:", JSON.stringify(provider, null, 2));
 
+  // Check for existing session
+  if (event.context.auth.isExistingSession) {
+    console.log("ℹ️  NOTE: This is an existing session (user was already authenticated)");
+    console.log("ℹ️  IdP token data is only available during fresh authentication");
+    console.log("ℹ️  To test this workflow, sign out completely and sign in fresh with a social provider");
+  }
+
   // Only process if authentication came from an OAuth2 social connection
   if (!provider || provider.protocol !== "oauth2") {
     console.log("❌ Not an OAuth2 social connection, skipping token enrichment");
     console.log("Reason - Provider is null/undefined:", !provider);
+    if (!provider && event.context.auth.isExistingSession) {
+      console.log("⚠️  Provider data is missing because this is an existing session");
+      console.log("⚠️  Sign out and sign in fresh to see IdP token enrichment");
+    }
     if (provider) {
       console.log("Reason - Protocol is not oauth2. Protocol value:", provider.protocol);
     }
