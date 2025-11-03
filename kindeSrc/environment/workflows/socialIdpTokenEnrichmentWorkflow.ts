@@ -50,17 +50,30 @@ interface IdTokenCustomClaims {
 export default async function Workflow(event: onUserTokenGeneratedEvent) {
   console.log("=== Social IdP Token Enrichment Workflow Started ===");
   
+  // Log the entire event context for debugging
+  console.log("Full event.context:", JSON.stringify(event.context, null, 2));
+  console.log("event.context.auth:", JSON.stringify(event.context.auth, null, 2));
+  
   const provider = event.context.auth.provider;
 
   // Log basic authentication context
   console.log("Auth origin:", event.context.auth.origin);
   console.log("Connection ID:", event.context.auth.connectionId);
   console.log("User ID:", event.context.user.id);
+  
+  // Detailed provider debugging
+  console.log("Provider exists?:", !!provider);
+  console.log("Provider type:", typeof provider);
+  console.log("Provider value:", provider);
+  console.log("Provider JSON:", JSON.stringify(provider, null, 2));
 
   // Only process if authentication came from an OAuth2 social connection
   if (!provider || provider.protocol !== "oauth2") {
     console.log("❌ Not an OAuth2 social connection, skipping token enrichment");
-    console.log("Provider data:", JSON.stringify(provider, null, 2));
+    console.log("Reason - Provider is null/undefined:", !provider);
+    if (provider) {
+      console.log("Reason - Protocol is not oauth2. Protocol value:", provider.protocol);
+    }
     return;
   }
 
