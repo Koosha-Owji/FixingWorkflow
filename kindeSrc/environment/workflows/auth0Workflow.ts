@@ -73,10 +73,10 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
           Authorization: `Bearer ${accessToken}`,
           "content-type": "application/json",
         },
-        body: params,
+        body: JSON.stringify(params),
         responseFormat: "json",
       });
-      return { data: response };
+      return response;
     },
     put: async ({ endpoint, params }: { endpoint: string; params: any }) => {
       const response = await fetch(`${issuerUrl}/api/v1/${endpoint}`, {
@@ -88,7 +88,7 @@ async function createKindeAPI(event: onExistingPasswordProvidedEvent) {
         body: JSON.stringify(params),
         responseFormat: "json",
       });
-      return { data: response };
+      return response;
     },
   };
 }
@@ -118,9 +118,9 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
 
     // Create the user in Kinde
     // You can use the userData from the external system to populate the Kinde user
-    const { data: res } = await kindeAPI.post({
+    const createUserResponse = await kindeAPI.post({
       endpoint: `user`,
-      params: JSON.stringify({
+      params: {
         profile: {
           given_name: userData.given_name,
           family_name: userData.family_name,
@@ -133,21 +133,26 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
             },
           },
         ],
-      }),
+      },
     });
 
-    const userId = res.id;
+    const userId = createUserResponse.data.id;
 
     // Set the password for the user in Kinde
     // You can use the hashed password provided by Kinde
-    const { data: pwdRes } = await kindeAPI.put({
+    const updatePasswordResponse = await kindeAPI.put({
       endpoint: `users/${userId}/password`,
       params: {
         hashed_password: hashedPassword,
       },
     });
-    console.log(pwdRes.message);
+    console.log(updatePasswordResponse.data.message);
   } catch (error) {
-    console.error("error", error);
+    console.error("Error creating user or setting password:", error);
+    // Log additional details if available
+    if (error && typeof error === 'object') {
+      console.error("Error details:", JSON.stringify(error, null, 2));
+    }
+    throw error; // Re-throw to let Kinde handle the failure according to failurePolicy
   }
 }
