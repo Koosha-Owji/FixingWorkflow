@@ -28,6 +28,7 @@ export const workflowSettings: WorkflowSettings = {
   bindings: {
     "kinde.accessToken": {}, // Required for modifying access tokens
     "kinde.idToken": {},     // Required for modifying ID tokens
+    "kinde.auth": {},        // Potentially required for provider data access
   },
 };
 
@@ -50,11 +51,21 @@ interface IdTokenCustomClaims {
 export default async function Workflow(event: onUserTokenGeneratedEvent) {
   console.log("=== Social IdP Token Enrichment Workflow Started ===");
   
-  // Log the entire event context for debugging
+  // Log the entire event for maximum debugging
+  console.log("Full event object:", JSON.stringify(event, null, 2));
   console.log("Full event.context:", JSON.stringify(event.context, null, 2));
   console.log("event.context.auth:", JSON.stringify(event.context.auth, null, 2));
+  console.log("event.request:", JSON.stringify(event.request, null, 2));
   
+  // Check for provider in multiple possible locations
   const provider = event.context.auth.provider;
+  const providerAlt = (event.context as any).provider;
+  const providerAuth = (event as any).provider;
+  
+  console.log("Checking multiple provider locations:");
+  console.log("- event.context.auth.provider:", provider);
+  console.log("- event.context.provider:", providerAlt);
+  console.log("- event.provider:", providerAuth);
 
   // Log basic authentication context
   console.log("Auth origin:", event.context.auth.origin);
