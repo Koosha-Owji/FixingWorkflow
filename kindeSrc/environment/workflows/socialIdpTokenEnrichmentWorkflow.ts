@@ -20,8 +20,8 @@ import {
  */
 
 export const workflowSettings: WorkflowSettings = {
-  id: "enrichTokensWithSocialIdpData",
-  trigger: WorkflowTrigger.TokensGeneration,
+  id: "onUserTokenGenerated",
+  trigger: WorkflowTrigger.UserTokensGeneration,
   bindings: {
     "kinde.accessToken": {}, // Required for modifying access tokens
     "kinde.idToken": {},     // Required for modifying ID tokens
