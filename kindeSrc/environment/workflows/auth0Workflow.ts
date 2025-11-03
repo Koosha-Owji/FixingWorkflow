@@ -130,6 +130,7 @@ export default async function Workflow(event: onExistingPasswordProvidedEvent) {
             type: "email",
             details: {
               email: providedEmail,
+              email_verified: true
             },
           },
         ],
