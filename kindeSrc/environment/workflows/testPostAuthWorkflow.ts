@@ -21,42 +21,61 @@ export default async function Workflow(event: onPostAuthenticationEvent) {
     console.log("✅ PROVIDER DATA FOUND!");
     console.log("Protocol:", provider.protocol);
     console.log("Provider name:", provider.provider);
-    console.log("Kinde Version:", provider.kindeVersion);
     
-    console.log("--- Exploring IdP Token Structure ---");
+    console.log("--- Deep Exploration of IdP Tokens ---");
     
-    // Check idToken
     const idToken = provider.data?.idToken;
-    console.log("idToken exists?:", !!idToken);
-    console.log("idToken type:", typeof idToken);
-    console.log("idToken keys:", idToken ? Object.keys(idToken) : "N/A");
-    console.log("idToken full:", JSON.stringify(idToken, null, 2));
+    const accessToken = provider.data?.accessToken;
     
-    // Check for claims at different levels
     if (idToken) {
-      console.log("idToken.claims:", JSON.stringify((idToken as any).claims, null, 2));
-      console.log("idToken.header:", JSON.stringify((idToken as any).header, null, 2));
+      console.log("IdToken object:", idToken);
+      console.log("IdToken constructor:", idToken.constructor?.name);
+      console.log("IdToken keys (Object.keys):", Object.keys(idToken));
+      console.log("IdToken keys (Object.getOwnPropertyNames):", Object.getOwnPropertyNames(idToken));
+      console.log("IdToken keys (Object.getOwnPropertyDescriptors):", Object.keys(Object.getOwnPropertyDescriptors(idToken)));
       
-      // Check if the idToken itself IS the claims object
-      console.log("Possible claims in idToken:");
-      console.log("- sub:", (idToken as any).sub);
-      console.log("- email:", (idToken as any).email);
-      console.log("- name:", (idToken as any).name);
-      console.log("- picture:", (idToken as any).picture);
-      console.log("- email_verified:", (idToken as any).email_verified);
+      // Try to access common JWT properties
+      console.log("--- Trying standard JWT structure ---");
+      console.log("idToken['header']:", (idToken as any)['header']);
+      console.log("idToken['payload']:", (idToken as any)['payload']);
+      console.log("idToken['claims']:", (idToken as any)['claims']);
+      
+      // Check prototype chain
+      console.log("--- Prototype exploration ---");
+      const proto = Object.getPrototypeOf(idToken);
+      console.log("Prototype:", proto);
+      console.log("Prototype keys:", Object.keys(proto));
+      console.log("Prototype own property names:", Object.getOwnPropertyNames(proto));
+      
+      // Try direct property access for common GitHub OAuth claims
+      console.log("--- Direct property access ---");
+      const props = ['sub', 'email', 'name', 'login', 'avatar_url', 'html_url', 'bio', 'company'];
+      props.forEach(prop => {
+        const val = (idToken as any)[prop];
+        if (val !== undefined) {
+          console.log(`idToken.${prop}:`, val);
+        }
+      });
+      
+      // Check if it's a function or has methods
+      console.log("--- Checking for methods ---");
+      if (typeof (idToken as any).getClaim === 'function') {
+        console.log("idToken.getClaim is a function!");
+        console.log("Try: idToken.getClaim('email')");
+      }
+      if (typeof (idToken as any).get === 'function') {
+        console.log("idToken.get is a function!");
+      }
+      if (typeof (idToken as any).getAll === 'function') {
+        console.log("idToken.getAll is a function!");
+      }
     }
     
-    // Check accessToken
-    const accessToken = provider.data?.accessToken;
     console.log("--- Access Token ---");
-    console.log("accessToken exists?:", !!accessToken);
-    console.log("accessToken type:", typeof accessToken);
-    console.log("accessToken keys:", accessToken ? Object.keys(accessToken) : "N/A");
-    console.log("accessToken full:", JSON.stringify(accessToken, null, 2));
-    
     if (accessToken) {
-      console.log("accessToken.claims:", JSON.stringify((accessToken as any).claims, null, 2));
-      console.log("accessToken.header:", JSON.stringify((accessToken as any).header, null, 2));
+      console.log("AccessToken object:", accessToken);
+      console.log("AccessToken keys:", Object.keys(accessToken));
+      console.log("AccessToken own property names:", Object.getOwnPropertyNames(accessToken));
     }
     
   } else {
