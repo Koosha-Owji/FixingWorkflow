@@ -2,60 +2,72 @@ import {
   onPostAuthenticationEvent,
   WorkflowSettings,
   WorkflowTrigger,
+  accessTokenCustomClaims,
+  idTokenCustomClaims,
 } from "@kinde/infrastructure";
 
-// Test workflow to check if provider data is available in post-authentication trigger
+// Test workflow to add custom claims from provider data in post-authentication
 
 export const workflowSettings: WorkflowSettings = {
   id: "postAuthentication",
   trigger: WorkflowTrigger.PostAuthentication,
-  bindings: {},
+  bindings: {
+    "kinde.accessToken": {}, // Try to enable token modification
+    "kinde.idToken": {},
+  },
 };
 
 export default async function Workflow(event: onPostAuthenticationEvent) {
-  console.log("=== Post Authentication Test Workflow ===");
+  console.log("=== Testing Custom Claims in Post Authentication ===");
   
   const provider = event.context.auth.provider;
   
-  if (provider) {
-    console.log("✅ PROVIDER DATA FOUND!");
-    console.log("Provider structure:", JSON.stringify(provider, null, 2));
+  if (!provider || provider.protocol !== "oauth2") {
+    console.log("❌ Not an OAuth2 social connection");
+    return;
+  }
+  
+  console.log("✅ OAuth2 provider found:", provider.provider);
+  
+  try {
+    // Try to initialize token claims
+    console.log("--- Attempting to add custom claims ---");
     
-    console.log("--- Exploring provider.data ---");
-    const providerData = provider.data;
-    console.log("provider.data exists:", !!providerData);
-    console.log("provider.data type:", typeof providerData);
-    console.log("provider.data keys:", providerData ? Object.keys(providerData) : "N/A");
-    console.log("provider.data own property names:", providerData ? Object.getOwnPropertyNames(providerData) : "N/A");
-    console.log("provider.data:", providerData);
+    const accessToken = accessTokenCustomClaims<{
+      idp_provider: string;
+      idp_email: string;
+      idp_picture: string;
+    }>();
     
-    // Check if data might be at a different location
-    console.log("--- Checking alternative locations ---");
-    console.log("provider.idToken:", (provider as any).idToken);
-    console.log("provider.accessToken:", (provider as any).accessToken);
-    console.log("provider.tokens:", (provider as any).tokens);
-    console.log("provider.claims:", (provider as any).claims);
+    const idToken = idTokenCustomClaims<{
+      idp_provider: string;
+      idp_picture: string;
+    }>();
     
-    // Check all properties of provider
-    console.log("--- All provider properties ---");
-    console.log("provider keys:", Object.keys(provider));
-    console.log("provider own property names:", Object.getOwnPropertyNames(provider));
+    const idTokenClaims = provider.data?.idToken?.claims;
     
-    // Try to access with for...in loop to catch everything
-    console.log("--- For...in loop through provider ---");
-    for (const key in provider) {
-      console.log(`provider[${key}]:`, (provider as any)[key]);
+    if (idTokenClaims) {
+      console.log("IdP claims available!");
+      
+      // Try to add claims
+      accessToken.idp_provider = provider.provider;
+      accessToken.idp_email = idTokenClaims.email as string;
+      accessToken.idp_picture = idTokenClaims.picture as string;
+      
+      idToken.idp_provider = provider.provider;
+      idToken.idp_picture = idTokenClaims.picture as string;
+      
+      console.log("✅ Custom claims added successfully!");
+      console.log("- idp_provider:", provider.provider);
+      console.log("- idp_email:", idTokenClaims.email);
+      console.log("- idp_picture:", idTokenClaims.picture);
+    } else {
+      console.log("⚠️ No IdP token claims available (expected for non-OIDC providers)");
     }
     
-    // Maybe GitHub doesn't return ID tokens?
-    console.log("--- GitHub OAuth Note ---");
-    console.log("GitHub OAuth typically returns:");
-    console.log("- access_token (for API calls)");
-    console.log("- But NO id_token (not an OIDC provider by default)");
-    console.log("User info must be fetched from GitHub API using the access token");
-    
-  } else {
-    console.log("❌ Provider data not available");
+  } catch (error) {
+    console.error("❌ Error adding custom claims:", error);
+    console.error("This might mean token modification is not available in PostAuthentication trigger");
   }
 }
 
