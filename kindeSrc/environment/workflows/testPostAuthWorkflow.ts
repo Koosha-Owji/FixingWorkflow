@@ -19,64 +19,40 @@ export default async function Workflow(event: onPostAuthenticationEvent) {
   
   if (provider) {
     console.log("✅ PROVIDER DATA FOUND!");
-    console.log("Protocol:", provider.protocol);
-    console.log("Provider name:", provider.provider);
+    console.log("Provider structure:", JSON.stringify(provider, null, 2));
     
-    console.log("--- Deep Exploration of IdP Tokens ---");
+    console.log("--- Exploring provider.data ---");
+    const providerData = provider.data;
+    console.log("provider.data exists:", !!providerData);
+    console.log("provider.data type:", typeof providerData);
+    console.log("provider.data keys:", providerData ? Object.keys(providerData) : "N/A");
+    console.log("provider.data own property names:", providerData ? Object.getOwnPropertyNames(providerData) : "N/A");
+    console.log("provider.data:", providerData);
     
-    const idToken = provider.data?.idToken;
-    const accessToken = provider.data?.accessToken;
+    // Check if data might be at a different location
+    console.log("--- Checking alternative locations ---");
+    console.log("provider.idToken:", (provider as any).idToken);
+    console.log("provider.accessToken:", (provider as any).accessToken);
+    console.log("provider.tokens:", (provider as any).tokens);
+    console.log("provider.claims:", (provider as any).claims);
     
-    if (idToken) {
-      console.log("IdToken object:", idToken);
-      console.log("IdToken constructor:", idToken.constructor?.name);
-      console.log("IdToken keys (Object.keys):", Object.keys(idToken));
-      console.log("IdToken keys (Object.getOwnPropertyNames):", Object.getOwnPropertyNames(idToken));
-      console.log("IdToken keys (Object.getOwnPropertyDescriptors):", Object.keys(Object.getOwnPropertyDescriptors(idToken)));
-      
-      // Try to access common JWT properties
-      console.log("--- Trying standard JWT structure ---");
-      console.log("idToken['header']:", (idToken as any)['header']);
-      console.log("idToken['payload']:", (idToken as any)['payload']);
-      console.log("idToken['claims']:", (idToken as any)['claims']);
-      
-      // Check prototype chain
-      console.log("--- Prototype exploration ---");
-      const proto = Object.getPrototypeOf(idToken);
-      console.log("Prototype:", proto);
-      console.log("Prototype keys:", Object.keys(proto));
-      console.log("Prototype own property names:", Object.getOwnPropertyNames(proto));
-      
-      // Try direct property access for common GitHub OAuth claims
-      console.log("--- Direct property access ---");
-      const props = ['sub', 'email', 'name', 'login', 'avatar_url', 'html_url', 'bio', 'company'];
-      props.forEach(prop => {
-        const val = (idToken as any)[prop];
-        if (val !== undefined) {
-          console.log(`idToken.${prop}:`, val);
-        }
-      });
-      
-      // Check if it's a function or has methods
-      console.log("--- Checking for methods ---");
-      if (typeof (idToken as any).getClaim === 'function') {
-        console.log("idToken.getClaim is a function!");
-        console.log("Try: idToken.getClaim('email')");
-      }
-      if (typeof (idToken as any).get === 'function') {
-        console.log("idToken.get is a function!");
-      }
-      if (typeof (idToken as any).getAll === 'function') {
-        console.log("idToken.getAll is a function!");
-      }
+    // Check all properties of provider
+    console.log("--- All provider properties ---");
+    console.log("provider keys:", Object.keys(provider));
+    console.log("provider own property names:", Object.getOwnPropertyNames(provider));
+    
+    // Try to access with for...in loop to catch everything
+    console.log("--- For...in loop through provider ---");
+    for (const key in provider) {
+      console.log(`provider[${key}]:`, (provider as any)[key]);
     }
     
-    console.log("--- Access Token ---");
-    if (accessToken) {
-      console.log("AccessToken object:", accessToken);
-      console.log("AccessToken keys:", Object.keys(accessToken));
-      console.log("AccessToken own property names:", Object.getOwnPropertyNames(accessToken));
-    }
+    // Maybe GitHub doesn't return ID tokens?
+    console.log("--- GitHub OAuth Note ---");
+    console.log("GitHub OAuth typically returns:");
+    console.log("- access_token (for API calls)");
+    console.log("- But NO id_token (not an OIDC provider by default)");
+    console.log("User info must be fetched from GitHub API using the access token");
     
   } else {
     console.log("❌ Provider data not available");
