@@ -8,22 +8,24 @@ import {
   fetch,
 } from "@kinde/infrastructure";
 
-/**
- * Social Connection Token Enrichment Workflow
- * 
- * This workflow uses the Kinde Management API to fetch connection details
- * and adds custom claims to tokens based on the authentication method used.
- * 
- * SETUP REQUIRED:
- * Create an M2M application with the following scope enabled:
- * - read:connections
- * 
- * In Settings -> Environment variables, set up the following:
- * - KINDE_WF_ISSUER_URL (e.g., https://yourdomain.kinde.com)
- * - KINDE_WF_M2M_CLIENT_ID (from M2M app)
- * - KINDE_WF_M2M_CLIENT_SECRET (from M2M app, mark as sensitive)
- */
+// This workflow uses the Kinde Management API to fetch connection details
+// and adds custom claims to tokens based on the authentication method used.
+//
+// This workflow requires you to set up the Kinde management API
+// You can do this by going to the Kinde dashboard.
+//
+// Create an M2M application with the following scope enabled:
+// * read:connections
+//
+// In Settings -> Environment variables set up the following variables with the
+// values from the M2M application you created above:
+//
+// * KINDE_WF_ISSUER_URL - Your Kinde domain (e.g., https://yourdomain.kinde.com)
+// * KINDE_WF_M2M_CLIENT_ID
+// * KINDE_WF_M2M_CLIENT_SECRET - Ensure this is setup with sensitive flag
+// enabled to prevent accidental sharing
 
+// The setting for this workflow
 export const workflowSettings: WorkflowSettings = {
   id: "onUserTokenGeneration",
   trigger: WorkflowTrigger.UserTokenGeneration,
@@ -32,25 +34,13 @@ export const workflowSettings: WorkflowSettings = {
   },
   bindings: {
     "kinde.accessToken": {}, // Required for modifying access tokens
-    "kinde.idToken": {},     // Required for modifying ID tokens
-    "kinde.fetch": {},       // Required for Management API calls
-    "kinde.env": {},         // Required to access environment variables
+    "kinde.idToken": {}, // Required for modifying ID tokens
+    "kinde.fetch": {}, // Required for management API calls
+    "kinde.env": {}, // Required to access your environment variables
   },
 };
 
-interface AccessTokenCustomClaims {
-  auth_provider: string;
-  auth_connection_id: string;
-  auth_connection_name: string;
-  auth_strategy: string;
-  auth_timestamp: string;
-}
-
-interface IdTokenCustomClaims {
-  auth_provider: string;
-  auth_connection_name: string;
-}
-
+// Helper function to create a Kinde Management API client
 async function createKindeAPI(event: onUserTokenGeneratedEvent) {
   const issuerUrl = getEnvironmentVariable("KINDE_WF_ISSUER_URL")?.value;
   const clientId = getEnvironmentVariable("KINDE_WF_M2M_CLIENT_ID")?.value;
@@ -69,11 +59,9 @@ async function createKindeAPI(event: onUserTokenGeneratedEvent) {
   });
 
   const accessToken = tokenResponse.data.access_token;
-  console.log("✓ Management API access token obtained");
 
   return {
     get: async ({ endpoint }: { endpoint: string }) => {
-      console.log(`Making GET request to: ${issuerUrl}/api/v1/${endpoint}`);
       const response = await fetch(`${issuerUrl}/api/v1/${endpoint}`, {
         method: "GET",
         headers: {
@@ -82,56 +70,52 @@ async function createKindeAPI(event: onUserTokenGeneratedEvent) {
         },
         responseFormat: "json",
       });
-      console.log(`GET ${endpoint} response:`, JSON.stringify(response, null, 2));
       return { data: response };
     },
   };
 }
 
+// The workflow code to be executed when the event is triggered
 export default async function Workflow(event: onUserTokenGeneratedEvent) {
-  console.log("=== Social IdP Token Enrichment Workflow Started ===");
-
   const connectionId = event.context.auth.connectionId;
-  console.log("Connection ID:", connectionId);
 
   try {
     // Create Kinde API instance
-    console.log("Creating Kinde Management API instance...");
     const kindeAPI = await createKindeAPI(event);
 
-    // Fetch connection details
-    console.log("Fetching connection details...");
+    // Fetch connection details from the Management API
     const { data: connectionResponse } = await kindeAPI.get({
       endpoint: `connections/${connectionId}`,
     });
 
     const connection = connectionResponse.data.connection;
-    console.log("Connection details retrieved:");
-    console.log("- Name:", connection.name);
-    console.log("- Display Name:", connection.display_name);
-    console.log("- Strategy:", connection.strategy);
 
-    // Initialize type-safe token claim objects
-    const accessToken = accessTokenCustomClaims<AccessTokenCustomClaims>();
-    const idToken = idTokenCustomClaims<IdTokenCustomClaims>();
+    // Set the types for the custom claims
+    const accessToken = accessTokenCustomClaims<{
+      auth_provider: string;
+      auth_connection_id: string;
+      auth_connection_name: string;
+      auth_strategy: string;
+      auth_timestamp: string;
+    }>();
 
-    // Add custom claims to tokens
+    const idToken = idTokenCustomClaims<{
+      auth_provider: string;
+      auth_connection_name: string;
+    }>();
+
+    // Add custom claims to the access token
     accessToken.auth_provider = connection.strategy;
     accessToken.auth_connection_id = connection.id;
     accessToken.auth_connection_name = connection.display_name || connection.name;
     accessToken.auth_strategy = connection.strategy;
     accessToken.auth_timestamp = new Date().toISOString();
 
+    // Add custom claims to the ID token
     idToken.auth_provider = connection.strategy;
     idToken.auth_connection_name = connection.display_name || connection.name;
 
-    console.log("✅ Successfully added custom claims to tokens");
-    console.log("Provider/Strategy:", connection.strategy);
-    console.log("Connection Name:", connection.display_name || connection.name);
-
   } catch (error) {
-    console.error("❌ Error enriching tokens:", error);
-    console.error("Error details:", JSON.stringify(error, null, 2));
-    // Don't throw - we don't want to break authentication if enrichment fails
+    console.error("error", error);
   }
 }
