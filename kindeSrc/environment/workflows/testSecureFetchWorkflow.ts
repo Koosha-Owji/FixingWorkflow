@@ -32,12 +32,13 @@ export default async function Workflow(event: onPostAuthenticationEvent) {
   try {
     console.log("Sending to:", url);
     
-    const result = await secureFetch(url, {
+    const {data: result} = await secureFetch(url, {
       method: "POST",
+      responseFormat: "json",
       headers: {
         "content-type": "application/json",
       },
-      responseFormat: "json",
+      body: testPayload,
     });
     
     console.log("✅ secureFetch successful:", result);
