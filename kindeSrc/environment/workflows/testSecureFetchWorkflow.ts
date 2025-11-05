@@ -8,8 +8,11 @@ import {
 // Test workflow to capture encrypted payload from secureFetch
 
 export const workflowSettings: WorkflowSettings = {
-  id: "userTokenGeneration",
+  id: "onUserTokenGeneration",
   trigger: WorkflowTrigger.UserTokenGeneration,
+  failurePolicy: {
+    action: "stop",
+  },
   bindings: {
     "kinde.secureFetch": {},
     url: {}, // Required for secureFetch to work
@@ -45,9 +48,6 @@ export default async function Workflow(event: onUserTokenGeneratedEvent) {
   } catch (error) {
     console.error("❌ secureFetch error:", error);
     console.error("Error details:", JSON.stringify(error, null, 2));
-    if (error && error.message) {
-      console.error("Error message:", error.message);
-    }
   }
 }
 
