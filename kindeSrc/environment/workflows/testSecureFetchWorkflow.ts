@@ -14,6 +14,7 @@ export const workflowSettings: WorkflowSettings = {
   bindings: {
     "kinde.secureFetch": {},
     "kinde.fetch": {},
+    url: {}, // Required for secureFetch to work
   },
 };
 
