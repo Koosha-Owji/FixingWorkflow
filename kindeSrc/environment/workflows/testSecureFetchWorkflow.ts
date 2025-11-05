@@ -1,5 +1,5 @@
 import {
-  onPostAuthenticationEvent,
+  onUserTokenGeneratedEvent,
   WorkflowSettings,
   WorkflowTrigger,
   secureFetch,
@@ -8,15 +8,15 @@ import {
 // Test workflow to capture encrypted payload from secureFetch
 
 export const workflowSettings: WorkflowSettings = {
-  id: "postAuthentication",
-  trigger: WorkflowTrigger.PostAuthentication,
+  id: "userTokenGeneration",
+  trigger: WorkflowTrigger.UserTokenGeneration,
   bindings: {
     "kinde.secureFetch": {},
     url: {}, // Required for secureFetch to work
   },
 };
 
-export default async function Workflow(event: onPostAuthenticationEvent) {
+export default async function Workflow(event: onUserTokenGeneratedEvent) {
   console.log("=== Testing secureFetch Encryption ===");
   
   const testPayload = {
