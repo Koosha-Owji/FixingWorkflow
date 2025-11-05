@@ -22,11 +22,7 @@ export const workflowSettings: WorkflowSettings = {
 export default async function Workflow(event: onUserTokenGeneratedEvent) {
   console.log("=== Testing secureFetch Encryption ===");
   
-  const testPayload = {
-    message: "Hello World",
-    userId: event.context.user.id,
-    timestamp: new Date().toISOString(),
-  };
+  const testPayload = "Hello World";
   
   console.log("Original payload:", JSON.stringify(testPayload));
   
