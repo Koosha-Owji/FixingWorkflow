@@ -47,7 +47,22 @@ export default async function Workflow(event: onUserTokenGeneratedEvent) {
     console.log("✅ secureFetch successful:", result);
   } catch (error) {
     console.error("❌ secureFetch error:", error);
+    console.error("Error type:", typeof error);
+    console.error("Error constructor:", error?.constructor?.name);
     console.error("Error details:", JSON.stringify(error, null, 2));
+    
+    // Try accessing error in different ways
+    if (error && typeof error === 'object') {
+      console.error("Error keys:", Object.keys(error));
+      console.error("Error.value:", (error as any).value);
+      console.error("Error.message:", (error as any).message);
+      
+      // Check if error.value has the actual error
+      if ((error as any).value) {
+        console.error("Error.value keys:", Object.keys((error as any).value));
+        console.error("Error.value.message:", (error as any).value?.message);
+      }
+    }
   }
 }
 
