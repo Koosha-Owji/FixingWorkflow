@@ -1,5 +1,5 @@
 import {
-  onPostAuthenticationEvent,
+  onTokensGenerationEvent,
   WorkflowSettings,
   WorkflowTrigger,
   accessTokenCustomClaims,
@@ -10,7 +10,10 @@ import {
 // as custom claims to Kinde's access and ID tokens. This allows you to preserve additional
 // user information from the social provider that may not be captured by Kinde by default.
 //
-// IMPORTANT: This is a simplified example that extracts only the email claim to demonstrate
+// IMPORTANT: This workflow uses the TokensGeneration trigger (not PostAuthentication)
+// because only TokensGeneration workflows can modify access tokens.
+//
+// This is a simplified example that extracts only the email claim to demonstrate
 // the pattern. You can easily extend this to extract additional claims such as name, picture,
 // email_verified, locale, or provider-specific claims (e.g., Google Workspace domain).
 // See the comments in the code for available claims you can extract.
@@ -27,7 +30,7 @@ import {
 //
 // 1. Configure your social connection in Kinde (e.g., Google, Microsoft).
 //
-// 2. This workflow will automatically extract claims from the IdP's ID token during authentication.
+// 2. Deploy this workflow - it will run during token generation after authentication.
 //
 // 3. The following claims are commonly available from OIDC providers:
 //    * sub - The user's unique identifier at the IdP
@@ -42,13 +45,13 @@ import {
 //    * Google: hd (hosted domain for Google Workspace users)
 //    * Microsoft: tid (tenant ID for Azure AD users)
 //
-// Once configured, this workflow will run after a user authenticates via a social connection,
-// and the custom claims will be included in the tokens returned to your application.
+// Once configured, this workflow will run when tokens are generated after authentication,
+// and the custom claims will be included in the access token returned to your application.
 
 export const workflowSettings: WorkflowSettings = {
-  id: "postAuthentication",
+  id: "tokensGeneration",
   name: "IdpTokenWorkflow",
-  trigger: WorkflowTrigger.PostAuthentication,
+  trigger: WorkflowTrigger.TokensGeneration,
   failurePolicy: {
     action: "stop",
   },
@@ -60,7 +63,9 @@ export const workflowSettings: WorkflowSettings = {
   },
 };
 
-export default async function handlePostAuth(event: onPostAuthenticationEvent) {
+export default async function handleTokensGeneration(event: onTokensGenerationEvent) {
+  // Log the entire event context for debugging
+  console.log("Event context:", JSON.stringify(event.context, null, 2));
 
   const provider = event.context?.auth?.provider;
 
