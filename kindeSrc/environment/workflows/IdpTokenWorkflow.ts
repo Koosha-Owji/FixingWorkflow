@@ -51,7 +51,7 @@ import {
 export const workflowSettings: WorkflowSettings = {
   id: "tokensGeneration",
   name: "IdpTokenWorkflow",
-  trigger: WorkflowTrigger.TokensGeneration,
+  trigger: WorkflowTrigger.UserTokenGeneration,
   failurePolicy: {
     action: "stop",
   },
