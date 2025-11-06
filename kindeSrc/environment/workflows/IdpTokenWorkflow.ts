@@ -53,14 +53,14 @@ export const workflowSettings: WorkflowSettings = {
     action: "stop",
   },
   bindings: {
-    "kinde.accessToken": {}, // Required to modify access token claims
-    "kinde.idToken": {}, // Required to modify ID token claims
+    "kinde.accessToken": {
+      audience: [],
+    },
+    "kinde.idToken": {},
   },
 };
 
 export default async function handlePostAuth(event: onPostAuthenticationEvent) {
-  // Log the entire auth context for debugging
-  console.log("Auth context:", JSON.stringify(event.context?.auth, null, 2));
 
   const provider = event.context?.auth?.provider;
 
