@@ -89,8 +89,13 @@ export default async function handlePostAuth(event: onPostAuthenticationEvent) {
     idTokenClaims.preferred_username ||
     idTokenClaims.upn;
 
+  console.log("Email value found:", emailValue);
+
   if (emailValue) {
     accessToken.idp_email = emailValue as string;
+    console.log("✓ Set idp_email on access token:", accessToken.idp_email);
+  } else {
+    console.log("✗ No email value available");
   }
 
   // You can also extract other claims from the IdP token:
