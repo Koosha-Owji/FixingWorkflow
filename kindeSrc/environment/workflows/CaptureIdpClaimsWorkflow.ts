@@ -119,16 +119,40 @@ export default async function captureIdpClaimsWorkflow(event: any) {
     }
   }
 
-  // Step 3: Filter out standard JWT claims we don't want to store
-  const standardClaims = new Set([
-    'iss', 'aud', 'exp', 'iat', 'nbf', 'jti', 'azp', 'nonce', 
-    'auth_time', 'at_hash', 'c_hash'
+  // Step 3: Filter out claims we don't want to store
+  const ignoreClaims = new Set([
+    // Standard JWT claims (not useful to store)
+    'iss',        // Issuer
+    'aud',        // Audience
+    'exp',        // Expiration time
+    'iat',        // Issued at
+    'nbf',        // Not before
+    'jti',        // JWT ID
+    'azp',        // Authorized party
+    'nonce',      // Nonce for replay protection
+    'auth_time',  // Authentication time
+    'at_hash',    // Access token hash
+    'c_hash',     // Code hash
+    
+    // Microsoft-specific noise claims
+    'aio',        // Microsoft internal state token (very long, not useful)
+    'ver',        // Token version
+    'rh',         // Microsoft refresh token hint
+    'uti',        // Microsoft unique token identifier (internal use)
+    'ipaddr',     // IP address (privacy concern, changes frequently)
+    
+    // Google-specific noise claims
+    'nonce',      // Already in standard claims
+    
+    // Other common noise claims
+    'sid',        // Session ID (changes per session)
+    's_hash',     // State hash
   ]);
   
   const claimsToStore: Record<string, any> = {};
   
   for (const [claimName, claimValue] of Object.entries(idTokenClaims)) {
-    if (!standardClaims.has(claimName) && claimValue !== null && claimValue !== undefined) {
+    if (!ignoreClaims.has(claimName) && claimValue !== null && claimValue !== undefined) {
       claimsToStore[claimName] = claimValue;
     }
   }
