@@ -57,10 +57,17 @@ export const workflowSettings: WorkflowSettings = {
 };
 
 export default async function handleTokensGeneration(event: onTokensGenerationEvent) {
-  const userId = event.user?.id;
+  // Try to get user ID from different possible locations in the event
+  const userId = event.user?.id || event.context?.user?.id || event.userId;
 
   if (!userId) {
     console.error("User ID is missing from event");
+    console.log("Event structure:", JSON.stringify({
+      hasUser: !!event.user,
+      hasContext: !!event.context,
+      contextUser: event.context?.user,
+      userId: event.userId,
+    }, null, 2));
     return;
   }
 
