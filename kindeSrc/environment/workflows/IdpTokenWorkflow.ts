@@ -4,6 +4,7 @@ import {
   WorkflowTrigger,
   accessTokenCustomClaims,
   idTokenCustomClaims,
+  createKindeAPI,
 } from "@kinde/infrastructure";
 
 /**
@@ -22,13 +23,20 @@ import {
  * - Easy to customize which claims go into which tokens
  * 
  * Setup:
- * 1. Deploy the CaptureIdpClaimsWorkflow first (PostAuthentication trigger)
- * 2. Deploy this workflow (TokensGeneration trigger)
- * 3. Authenticate with a social provider
- * 4. Your tokens will include all captured IdP claims
+ * 1. Create a Machine-to-Machine (M2M) app in Kinde with this scope:
+ *    - read:user_properties
+ * 
+ * 2. Add these environment variables to your workflow:
+ *    - KINDE_WF_M2M_CLIENT_ID
+ *    - KINDE_WF_M2M_CLIENT_SECRET (mark as sensitive)
+ * 
+ * 3. Deploy the CaptureIdpClaimsWorkflow first (PostAuthentication trigger)
+ * 4. Deploy this workflow (TokensGeneration trigger)
+ * 5. Authenticate with a social provider
+ * 6. Your tokens will include all captured IdP claims
  * 
  * Note: This workflow runs on EVERY token generation, not just initial authentication.
- * The claims are read from the user's stored properties.
+ * The claims are read from the user's stored properties via Management API.
  */
 
 export const workflowSettings: WorkflowSettings = {
@@ -43,15 +51,41 @@ export const workflowSettings: WorkflowSettings = {
       audience: [],
     },
     "kinde.idToken": {},
+    "kinde.env": {},
+    "url": {},
   },
 };
 
 export default async function handleTokensGeneration(event: onTokensGenerationEvent) {
-  // Access user properties - these were set by the CaptureIdpClaimsWorkflow
-  const userProperties = event.user?.properties;
+  const userId = event.user?.id;
 
-  if (!userProperties) {
-    console.log("No user properties available");
+  if (!userId) {
+    console.error("User ID is missing from event");
+    return;
+  }
+
+  console.log(`Fetching IdP claims for user: ${userId}`);
+
+  // Create the Kinde API client to fetch user properties
+  const kindeAPI = await createKindeAPI(event);
+
+  // Fetch user properties via Management API
+  let userProperties: Record<string, any> = {};
+  
+  try {
+    const propertiesResponse = await kindeAPI.get({
+      endpoint: `users/${userId}/properties`,
+    });
+
+    // Convert properties array to a key-value object
+    if (propertiesResponse.properties && Array.isArray(propertiesResponse.properties)) {
+      for (const prop of propertiesResponse.properties) {
+        userProperties[prop.key] = prop.value;
+      }
+      console.log(`Fetched ${propertiesResponse.properties.length} user properties`);
+    }
+  } catch (error: any) {
+    console.error("Failed to fetch user properties:", error?.message || error);
     return;
   }
 
