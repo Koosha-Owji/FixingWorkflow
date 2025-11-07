@@ -84,12 +84,17 @@ export default async function handleTokensGeneration(event: onTokensGenerationEv
       endpoint: `users/${userId}/properties`,
     });
 
+    console.log("API Response:", JSON.stringify(propertiesResponse, null, 2));
+
     // Convert properties array to a key-value object
     if (propertiesResponse.properties && Array.isArray(propertiesResponse.properties)) {
       for (const prop of propertiesResponse.properties) {
         userProperties[prop.key] = prop.value;
       }
       console.log(`Fetched ${propertiesResponse.properties.length} user properties`);
+      console.log(`Property keys: ${Object.keys(userProperties).join(', ')}`);
+    } else {
+      console.log("No properties array in response or not an array");
     }
   } catch (error: any) {
     console.error("Failed to fetch user properties:", error?.message || error);
@@ -99,6 +104,7 @@ export default async function handleTokensGeneration(event: onTokensGenerationEv
   // Check if the idp_claims property exists
   if (!userProperties.idp_claims) {
     console.log("No idp_claims property found - user may not have authenticated via IdP");
+    console.log(`Available properties: ${JSON.stringify(Object.keys(userProperties))}`);
     return;
   }
 
