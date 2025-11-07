@@ -84,17 +84,23 @@ export default async function handleTokensGeneration(event: onTokensGenerationEv
       endpoint: `users/${userId}/properties`,
     });
 
-    console.log("API Response:", JSON.stringify(propertiesResponse, null, 2));
+    // The response structure is: { data: { properties: [...] } }
+    const properties = propertiesResponse?.data?.properties || propertiesResponse?.properties;
 
     // Convert properties array to a key-value object
-    if (propertiesResponse.properties && Array.isArray(propertiesResponse.properties)) {
-      for (const prop of propertiesResponse.properties) {
+    if (properties && Array.isArray(properties)) {
+      for (const prop of properties) {
         userProperties[prop.key] = prop.value;
       }
-      console.log(`Fetched ${propertiesResponse.properties.length} user properties`);
-      console.log(`Property keys: ${Object.keys(userProperties).join(', ')}`);
+      console.log(`✓ Fetched ${properties.length} user properties`);
+      
+      // Check if idp_claims is among them
+      if (userProperties.idp_claims) {
+        console.log("✓ Found idp_claims property");
+      }
     } else {
       console.log("No properties array in response or not an array");
+      console.log("Response structure:", JSON.stringify(propertiesResponse, null, 2));
     }
   } catch (error: any) {
     console.error("Failed to fetch user properties:", error?.message || error);
