@@ -10,10 +10,10 @@ import {
 /**
  * Add IdP Claims to Tokens Workflow
  * 
- * This workflow reads IdP claims that were captured during Post Authentication
- * (stored in the `idp_claims` user property) and adds them to the access and ID tokens.
+ * This workflow reads IdP claims that were captured during authentication
+ * (stored in the `idp_claims` user property) and adds them to tokens.
  * 
- * This workflow works in conjunction with the CaptureIdpClaimsWorkflow:
+ * This workflow works in conjunction with CaptureIdpClaimsWorkflow:
  * 1. CaptureIdpClaimsWorkflow (PostAuthentication) - captures IdP claims and stores them
  * 2. This workflow (TokensGeneration) - reads stored claims and adds them to tokens
  * 
@@ -21,26 +21,36 @@ import {
  * - Automatically includes ALL IdP claims in tokens (no hardcoding needed)
  * - Claims persist across token refreshes
  * - Easy to customize which claims go into which tokens
+ * - Works with any OAuth2/OIDC provider
  * 
  * Setup:
- * 1. Create a Machine-to-Machine (M2M) app in Kinde with this scope:
+ * 1. Create a Machine-to-Machine (M2M) application in Kinde with this scope:
  *    - read:user_properties
  * 
  * 2. Add these environment variables to your workflow:
- *    - KINDE_WF_M2M_CLIENT_ID
- *    - KINDE_WF_M2M_CLIENT_SECRET (mark as sensitive)
+ *    - KINDE_WF_M2M_CLIENT_ID (from your M2M app)
+ *    - KINDE_WF_M2M_CLIENT_SECRET (from your M2M app, mark as sensitive)
  * 
  * 3. Deploy the CaptureIdpClaimsWorkflow first (PostAuthentication trigger)
  * 4. Deploy this workflow (TokensGeneration trigger)
- * 5. Authenticate with a social provider
- * 6. Your tokens will include all captured IdP claims
+ * 5. Authenticate via a social connection to test
+ * 6. Your tokens will include all captured IdP claims with "idp_" prefix
+ * 
+ * Example token claims after deployment:
+ * - idp_email: user's email from IdP
+ * - idp_name: user's full name from IdP
+ * - idp_sub: user's unique ID at the IdP
+ * - idp_picture: user's profile picture URL
+ * - Plus any other claims provided by the IdP
  * 
  * Note: This workflow runs on EVERY token generation, not just initial authentication.
- * The claims are read from the user's stored properties via Management API.
+ * The claims are fetched from stored user properties via Management API.
+ * 
+ * Trigger: user:tokens_generation
  */
 
 export const workflowSettings: WorkflowSettings = {
-  id: "tokensGeneration",
+  id: "addIdpClaimsToTokens",
   name: "Add IdP Claims to Tokens",
   trigger: WorkflowTrigger.UserTokenGeneration,
   failurePolicy: {
@@ -57,21 +67,13 @@ export const workflowSettings: WorkflowSettings = {
 };
 
 export default async function handleTokensGeneration(event: onTokensGenerationEvent) {
-  // Try to get user ID from different possible locations in the event
-  const userId = event.user?.id || event.context?.user?.id || event.userId;
+  // Get user ID from the event
+  const userId = event.user?.id || event.context?.user?.id;
 
   if (!userId) {
     console.error("User ID is missing from event");
-    console.log("Event structure:", JSON.stringify({
-      hasUser: !!event.user,
-      hasContext: !!event.context,
-      contextUser: event.context?.user,
-      userId: event.userId,
-    }, null, 2));
     return;
   }
-
-  console.log(`Fetching IdP claims for user: ${userId}`);
 
   // Create the Kinde API client to fetch user properties
   const kindeAPI = await createKindeAPI(event);
@@ -92,15 +94,6 @@ export default async function handleTokensGeneration(event: onTokensGenerationEv
       for (const prop of properties) {
         userProperties[prop.key] = prop.value;
       }
-      console.log(`✓ Fetched ${properties.length} user properties`);
-      
-      // Check if idp_claims is among them
-      if (userProperties.idp_claims) {
-        console.log("✓ Found idp_claims property");
-      }
-    } else {
-      console.log("No properties array in response or not an array");
-      console.log("Response structure:", JSON.stringify(propertiesResponse, null, 2));
     }
   } catch (error: any) {
     console.error("Failed to fetch user properties:", error?.message || error);
@@ -109,8 +102,7 @@ export default async function handleTokensGeneration(event: onTokensGenerationEv
 
   // Check if the idp_claims property exists
   if (!userProperties.idp_claims) {
-    console.log("No idp_claims property found - user may not have authenticated via IdP");
-    console.log(`Available properties: ${JSON.stringify(Object.keys(userProperties))}`);
+    // User hasn't authenticated via IdP or CaptureIdpClaimsWorkflow isn't deployed
     return;
   }
 
@@ -118,40 +110,35 @@ export default async function handleTokensGeneration(event: onTokensGenerationEv
   let idpClaims: Record<string, any>;
   try {
     idpClaims = JSON.parse(userProperties.idp_claims as string);
-    console.log(`Parsed IdP claims from property: ${Object.keys(idpClaims).length} claims found`);
   } catch (error) {
     console.error("Failed to parse idp_claims property:", error);
     return;
   }
 
-  // Use Record<string, any> to allow dynamic property assignment
+  // Initialize token custom claims with dynamic types
   const accessToken = accessTokenCustomClaims<Record<string, any>>();
   const idToken = idTokenCustomClaims<Record<string, any>>();
 
-  // Add ALL IdP claims to tokens with "idp_" prefix
+  // Add all IdP claims to tokens with "idp_" prefix
   // Skip metadata fields (those starting with "_")
   let claimsAdded = 0;
   
   for (const [claimName, claimValue] of Object.entries(idpClaims)) {
-    // Skip metadata fields
+    // Skip metadata fields like _provider and _last_updated
     if (claimName.startsWith('_')) {
       continue;
     }
 
     // Add to both access and ID tokens with "idp_" prefix
     const tokenClaimName = `idp_${claimName}`;
-    
     accessToken[tokenClaimName] = claimValue;
     idToken[tokenClaimName] = claimValue;
     
     claimsAdded++;
   }
 
-  console.log(`✓ Added ${claimsAdded} IdP claims to tokens`);
-  console.log(`Claims added: ${Object.keys(idpClaims).filter(k => !k.startsWith('_')).join(', ')}`);
-
-  // Optionally log provider info from metadata
-  if (idpClaims._provider) {
-    console.log(`Provider: ${idpClaims._provider}, Last updated: ${idpClaims._last_updated}`);
+  if (claimsAdded > 0) {
+    console.log(`Added ${claimsAdded} IdP claims to tokens (provider: ${idpClaims._provider || 'unknown'})`);
   }
 }
+
