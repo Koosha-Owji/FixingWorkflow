@@ -5,7 +5,6 @@ import {
   invalidateFormField,
   fetch,
 } from "@kinde/infrastructure";
-import { createHash } from "crypto";
 
 // Have I Been Pwned password check workflow
 // - Uses the k-anonymity "range" API to avoid sending full password hashes
@@ -25,8 +24,13 @@ export const workflowSettings: WorkflowSettings = {
   },
 };
 
-function sha1HexUpper(value: string): string {
-  return createHash("sha1").update(value, "utf8").digest("hex").toUpperCase();
+async function sha1HexUpper(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
 }
 
 function parseMatches(body: string, suffix: string): number {
@@ -51,7 +55,7 @@ export default async function Workflow(event: onNewPasswordProvidedEvent) {
     return;
   }
 
-  const fullHash = sha1HexUpper(password);
+  const fullHash = await sha1HexUpper(password);
   const prefix = fullHash.slice(0, 5);
   const suffix = fullHash.slice(5);
 
