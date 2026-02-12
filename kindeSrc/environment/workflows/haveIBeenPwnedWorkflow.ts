@@ -24,8 +24,26 @@ export const workflowSettings: WorkflowSettings = {
   },
 };
 
+function utf8Encode(input: string): Uint8Array {
+  // encodeURIComponent gives percent-encoded UTF-8; parse it into bytes
+  const encoded = encodeURIComponent(input);
+  const bytes: number[] = [];
+
+  for (let i = 0; i < encoded.length; i++) {
+    const char = encoded[i];
+    if (char === "%") {
+      bytes.push(parseInt(encoded.substring(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      bytes.push(char.charCodeAt(0));
+    }
+  }
+
+  return new Uint8Array(bytes);
+}
+
 async function sha1HexUpper(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
+  const bytes = utf8Encode(value);
   const digest = await crypto.subtle.digest("SHA-1", bytes);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
