@@ -2,7 +2,6 @@
 
 import {
   getKindeCSRF,
-  getKindeNonce,
   getKindeRequiredCSS,
   getKindeRequiredJS,
   getSVGFaviconUrl,
@@ -35,7 +34,7 @@ export const Root = ({ children, context, request }: RootProps): React.JSX.Eleme
         <link href={getSVGFaviconUrl()} rel="icon" type="image/svg+xml" />
         {getKindeRequiredCSS()}
         {getKindeRequiredJS()}
-        <style nonce={getKindeNonce()}>{getStyles()}</style>
+        <style>{getStyles()}</style>
       </head>
 
       <body>
