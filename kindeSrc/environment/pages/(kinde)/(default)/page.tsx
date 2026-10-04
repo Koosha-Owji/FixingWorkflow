@@ -1,122 +1,67 @@
 "use server";
 
+import { getKindeWidget, getLogoUrl, type KindePageEvent } from "@kinde/infrastructure";
 import React from "react";
 import { renderToString } from "react-dom/server.browser";
-import {
-  getKindeRequiredCSS,
-  getKindeRequiredJS,
-  getKindeNonce,
-  getKindeWidget,
-  getKindeCSRF,
-  getLogoUrl,
-  getSVGFaviconUrl,
-  setKindeDesignerCustomProperties,
-} from "@kinde/infrastructure";
+import { Root } from "../../../../components/root";
 
-const Layout = async ({ request, context }: any) => {
+// The page Kinde falls back to for any sign-in screen without a page of its own.
+// Kinde renders its own form where getKindeWidget() is placed; everything around it is ours. The logo
+// is the one uploaded in Kinde's brand settings, so the page does not depend on a VisualDLP host.
+
+// Pages apply to every application in the Kinde environment. The VisualDLP footer shows only when the
+// sign-in will return to a VisualDLP host; any other application gets the card without it.
+const returnsToVisualDlp = (redirectUri: string | undefined): boolean => {
+  try {
+    const host = new URL(redirectUri ?? "").hostname;
+    return host === "visualdlp.com" || host.endsWith(".visualdlp.com") || host === "localhost";
+  } catch {
+    return false;
+  }
+};
+
+const VisualDlpFooter = (): React.JSX.Element => (
+  <footer className="vdlp-footer">
+    <div>
+      <strong>VisualDLP</strong> - Dental Lab Management
+    </div>
+    <div>Copyright 2015-{new Date().getFullYear()} EasyRx, LLC</div>
+    <div>
+      By signing in, you agree to our{" "}
+      <a href="https://jenmarinternational.com/terms-of-service/" rel="noopener" target="_blank">
+        Terms of Service
+      </a>
+      ,{" "}
+      <a href="https://jenmarinternational.com/privacy-policy-2/" rel="noopener" target="_blank">
+        Privacy Policy
+      </a>{" "}
+      and our{" "}
+      <a href="https://jenmarinternational.com/business-associate-agreement/" rel="noopener" target="_blank">
+        Business Associate Agreement
+      </a>
+      .
+    </div>
+  </footer>
+);
+
+const DefaultPage = ({ context, request }: KindePageEvent): React.JSX.Element => {
+  const isVisualDlp = returnsToVisualDlp(request.authUrlParams?.redirectUri);
   return (
-    <html lang={request.locale.lang} dir={request.locale.isRtl ? "rtl" : "ltr"}>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="robots" content="noindex" />
-        <meta name="csrf-token" content={getKindeCSRF()} />
-        <title>{context.widget.content.page_title}</title>
+    <Root context={context} request={request}>
+      <div className="vdlp-page">
+        <main className="vdlp-card">
+          <img alt={context.widget.content.logoAlt || ""} className="vdlp-logo" src={getLogoUrl()} />
+          <h1 className="vdlp-heading">{context.widget.content.heading}</h1>
+          <p className="vdlp-description">{context.widget.content.description}</p>
+          {getKindeWidget()}
+        </main>
 
-        <link rel="icon" href={getSVGFaviconUrl()} type="image/svg+xml" />
-        {getKindeRequiredCSS()}
-        {getKindeRequiredJS()}
-        <style nonce={getKindeNonce()}>
-          {`:root {
-          ${setKindeDesignerCustomProperties({
-            baseBackgroundColor: "#fff",
-            baseLinkColor: "#230078",
-            buttonBorderRadius: "0.5rem",
-            primaryButtonBackgroundColor: "#230078",
-            primaryButtonColor: "#fff",
-            inputBorderRadius: "0.5rem"
-          })}}
-          `}
-        </style>
-        <style nonce={getKindeNonce()}>
-          {`
-            :root {
-                --kinde-base-color: rgb(12, 0, 32);
-                --kinde-base-font-family: -apple-system, system-ui, BlinkMacSystemFont, Helvetica, Arial, Segoe UI, Roboto, sans-serif;
-            }
-
-            [data-kinde-control-select-text]{
-                background-color: rgb(250, 250, 251);
-            }
-            .c-container {
-              padding: 1.5rem;
-              display: grid;
-              gap: 2rem;
-              min-height: 100vh;
-            }
-            .c-widget {
-                max-width: 400px;
-                width: 100%;
-                margin: 0px auto;
-            }
-            .c-footer {
-              border-top: 1px solid rgba(12, 0, 32, 0.08);
-              padding-block: 1.5rem;
-              display: flex;
-              justify-content: space-between;
-            }
-            .c-footer-links {
-                display: flex;
-                gap: 1.5rem;
-                list-style: none;
-                padding: 0;
-                margin: 0;
-            }
-            .c-header {
-              text-align: center;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-            }
-          `}
-        </style>
-      </head>
-      <body>
-        <div data-kinde-root="/admin" className="c-container">
-          <header className="c-header">
-            <img src={getLogoUrl()} alt={context.widget.content.logo_alt} />
-          </header>
-          <main>
-            <div className="c-widget">
-              <h1>{context.widget.content.heading}</h1>
-              <p>{context.widget.content.description}</p>
-              <div>{getKindeWidget()}</div>
-            </div>
-          </main>
-          <footer className="c-footer">
-            <p>
-              &copy; 2025 - Powered by Kinde
-            </p>
-            <ul className="c-footer-links">
-              <li>
-                <a href="">Privacy</a>
-              </li>
-              <li>
-                <a href="">Terms</a>
-              </li>
-              <li>
-                <a href="">Get help</a>
-              </li>
-            </ul>
-          </footer>
-        </div>
-      </body>
-    </html>
+        {isVisualDlp && <VisualDlpFooter />}
+      </div>
+    </Root>
   );
 };
 
-export default async function Page(event: any) {
-  const page = await Layout({ ...event });
-  return renderToString(page);
+export default async function Page(event: KindePageEvent): Promise<string> {
+  return renderToString(DefaultPage(event));
 }
