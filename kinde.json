@@ -1,5 +1,4 @@
 {
   "rootDir": "kindeSrc",
-  "version": "2024-12-09",
-  "integrations": { "npm": { "enabled": true } }
+  "version": "2024-12-09"
 }
