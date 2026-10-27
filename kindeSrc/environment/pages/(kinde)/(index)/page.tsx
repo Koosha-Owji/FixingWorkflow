@@ -17,7 +17,7 @@ import { renderToString } from "react-dom/server.browser";
 // was served with, offers a JavaScript redirect button, and redirects itself with a meta refresh
 // after metaRefreshSeconds.
 const target = "https://example.com/?from=kinde-index";
-const metaRefreshSeconds = 30;
+const metaRefreshSeconds = 0;
 
 // Runs only if the CSP allows inline scripts carrying Kinde's nonce.
 const nonceScript = `
