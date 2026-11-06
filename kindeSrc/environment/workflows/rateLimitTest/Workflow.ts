@@ -1,4 +1,5 @@
 import {
+  fetch,
   getEnvironmentVariable,
   getM2MToken,
   KindeFetchOptions,
@@ -11,13 +12,18 @@ import {
 // own machine? Measured locally (2026-11-06): the first 429 came after exactly 2,000 calls, with
 // RateLimit-Reset making up the rest of a one-minute window.
 //
-// On each sign-in this calls GET /api/v1/users with the M2M app in KINDE_WF_M2M_CLIENT_ID / _SECRET
-// until the first 429, or RATE_TEST_CALLS calls (default 2,100). It logs progress every 200 calls,
-// so if Kinde stops the workflow for running too long, the logs still show how far it got and how
-// fast. Failure policy "continue": it never blocks the sign-in.
+// What the first run showed about the runtime:
+// - About 1,600 calls fit in one run before "execution time exceeded", so one run cannot reach 2,000.
+// - Date.now() does not advance during a run (every reading was 0ms after the start). Elapsed time
+//   is read from Cloudflare's /cdn-cgi/trace instead, which also gives the outbound IP.
+// - kinde.fetch returns only { json }: no status, no headers. A 429 has an empty body, so an empty
+//   response is taken as the 429.
 //
-// The calls go through the raw kinde.fetch because createKindeAPI's get() returns only the response
-// body, and a 429 has an empty body. The first raw response is logged so its shape is visible.
+// So the test takes two sign-ins within a minute. Each run makes RATE_TEST_CALLS calls (default
+// 1,200) to GET /api/v1/users with the M2M app in KINDE_WF_M2M_CLIENT_ID / _SECRET, stopping at the
+// first empty response. If workflow traffic has the same 2,000-per-minute limit, the second run is
+// refused after about 800. Compare the two runs' "started" times to check they fell in one minute.
+// Failure policy "continue": it never blocks the sign-in.
 
 export const workflowSettings: WorkflowSettings = {
   id: "rateLimitTest",
@@ -37,26 +43,35 @@ declare const kinde: {
   fetch: (url: string, options: KindeFetchOptions) => unknown;
 };
 
-const DEFAULT_CALLS = 2100;
-// Calls started together. If the runtime's fetch blocks, they run one at a time regardless.
-const WORKERS = 3;
+const DEFAULT_CALLS = 1200;
 const PROGRESS_EVERY = 200;
-// Give up after this many failures in a row that are not 429s (bad scope, bad credentials).
-const MAX_OTHER_IN_A_ROW = 5;
+// Give up after this many error bodies in a row (bad scope, bad credentials).
+const MAX_ERRORS_IN_A_ROW = 5;
 
 function env(key: string): string | undefined {
   return getEnvironmentVariable(key)?.value;
 }
 
-function statusOf(res: unknown): number | undefined {
-  const r = res as { status?: unknown; statusCode?: unknown } | null;
-  const status = r?.status ?? r?.statusCode;
-  return typeof status === "number" ? status : undefined;
+// Real time and outbound IP from Cloudflare, since the runtime's clock is frozen during a run.
+async function trace(): Promise<{ ts: number | null; ip: string | null }> {
+  try {
+    const { data } = await fetch<{ data: string }>("https://www.cloudflare.com/cdn-cgi/trace", {
+      method: "GET",
+      responseFormat: "text",
+      headers: {},
+    });
+    const text = String(data);
+    const ts = parseFloat(/^ts=(.+)$/m.exec(text)?.[1] ?? "");
+    const ip = /^ip=(.+)$/m.exec(text)?.[1] ?? null;
+    return { ts: Number.isFinite(ts) ? ts : null, ip };
+  } catch {
+    return { ts: null, ip: null };
+  }
 }
 
 export default async function Workflow(event: onPostAuthenticationEvent) {
   const domain = event.context.domains.kindeDomain;
-  console.log("Rate limit test: started", new Date().toISOString(), domain);
+  console.log("Rate limit test: started", new Date().toISOString());
 
   const clientId = env("KINDE_WF_M2M_CLIENT_ID");
   const clientSecret = env("KINDE_WF_M2M_CLIENT_SECRET");
@@ -91,68 +106,50 @@ export default async function Workflow(event: onPostAuthenticationEvent) {
     headers: { authorization: `Bearer ${token}`, accept: "application/json" },
   };
 
-  const t0 = Date.now();
-  let started = 0;
+  const start = await trace();
+  console.log("Rate limit test: first call at", start.ts, "from IP", start.ip);
+
   let ok = 0;
-  let otherInARow = 0;
-  let stopReason: string | null = null;
-  let loggedShape = false;
+  let errorsInARow = 0;
+  let stopReason = `reached ${maxCalls} calls with no 429`;
 
-  const worker = async () => {
-    while (!stopReason && started < maxCalls) {
-      started++;
-      let outcome: "ok" | "429" | "other";
-      let detail = "";
-      try {
-        const res = await kinde.fetch(url, options);
-        if (!loggedShape) {
-          loggedShape = true;
-          console.log("Rate limit test: raw response shape", JSON.stringify(res ?? null).slice(0, 1000));
-        }
-        const body = (res as { json?: { code?: string; users?: unknown } } | null)?.json;
-        if (statusOf(res) === 429) {
-          outcome = "429";
-        } else if (body?.code === "OK" || Array.isArray(body?.users)) {
-          outcome = "ok";
-        } else {
-          outcome = "other";
-        }
-        detail = JSON.stringify(res ?? null).slice(0, 500);
-      } catch (e) {
-        detail = (e as Error).message ?? String(e);
-        outcome = /429|too many/i.test(detail) ? "429" : "other";
+  for (let i = 0; i < maxCalls; i++) {
+    let res: unknown;
+    try {
+      res = await kinde.fetch(url, options);
+    } catch (e) {
+      stopReason = `threw after ${ok} ok: ${(e as Error).message ?? String(e)}`;
+      break;
+    }
+    const body = (res as { json?: { code?: string; users?: unknown } | null } | null)?.json;
+    if (body?.code === "OK" || Array.isArray(body?.users)) {
+      ok++;
+      errorsInARow = 0;
+      if (ok % PROGRESS_EVERY === 0) {
+        console.log(`Rate limit test: ${ok} ok`);
       }
-
-      if (outcome === "ok") {
-        ok++;
-        otherInARow = 0;
-        if (ok % PROGRESS_EVERY === 0) {
-          console.log(`Rate limit test: ${ok} ok after ${Date.now() - t0}ms`);
-        }
-      } else if (outcome === "429") {
-        stopReason = `429 after ${ok} ok in ${Date.now() - t0}ms: ${detail}`;
-      } else {
-        // A 429 with its status hidden would also land here, as an empty response.
-        console.log(`Rate limit test: non-ok response after ${ok} ok in ${Date.now() - t0}ms:`, detail);
-        if (++otherInARow >= MAX_OTHER_IN_A_ROW) {
-          stopReason = `${MAX_OTHER_IN_A_ROW} non-ok responses in a row after ${ok} ok`;
-        }
+    } else if (body === undefined || body === null || (typeof body === "object" && Object.keys(body).length === 0)) {
+      stopReason = `empty response (the 429) after ${ok} ok: ${JSON.stringify(res ?? null).slice(0, 300)}`;
+      break;
+    } else {
+      console.log(`Rate limit test: error body after ${ok} ok:`, JSON.stringify(body).slice(0, 500));
+      if (++errorsInARow >= MAX_ERRORS_IN_A_ROW) {
+        stopReason = `${MAX_ERRORS_IN_A_ROW} error bodies in a row after ${ok} ok`;
+        break;
       }
     }
-  };
+  }
 
-  await Promise.all(Array.from({ length: WORKERS }, worker));
-
-  const ms = Date.now() - t0;
+  const end = await trace();
+  const seconds = start.ts !== null && end.ts !== null ? +(end.ts - start.ts).toFixed(1) : null;
   console.log(
     "Rate limit test: summary",
     JSON.stringify({
-      finished: new Date().toISOString(),
       ok,
-      calls: started,
-      ms,
-      perMinute: Math.round((ok / ms) * 60000),
-      stopReason: stopReason ?? `reached ${maxCalls} calls with no 429`,
+      seconds,
+      perMinute: seconds ? Math.round((ok / seconds) * 60) : null,
+      stopReason,
+      ip: start.ip,
     })
   );
 }
